@@ -29,7 +29,9 @@ interface State {
   // Connection
   activeConnection: ConnectionMeta | null;
   setActiveConnection: (c: ConnectionMeta | null) => void;
-
+  
+  updateDashboardChart: (id: string, patch: Partial<DashboardChart>) => void;
+  
   // Schema
   schema: TableSchema[];
   setSchema: (schema: TableSchema[]) => void;
@@ -44,6 +46,12 @@ interface State {
   dashboardCharts: DashboardChart[];
   addDashboardChart: (chart: DashboardChart) => void;
   removeDashboardChart: (id: string) => void;
+
+  updateDashboardChart: (id, patch) =>
+  set((s) => {
+    const idx = s.dashboardCharts.findIndex((c: DashboardChart) => c.id === id);
+    if (idx !== -1) Object.assign(s.dashboardCharts[idx], patch);
+  }),
 
   // Querying
   isQuerying: boolean;
