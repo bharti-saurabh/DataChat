@@ -1,5 +1,9 @@
 import type { CollabClientMsg, CollabServerMsg } from "@datachat/shared";
 
+// Collaboration requires a persistent WebSocket server.
+// Set VITE_ENABLE_COLLAB=true in .env.local to enable locally.
+const COLLAB_ENABLED = import.meta.env.VITE_ENABLE_COLLAB === "true";
+
 type Listener = (msg: CollabServerMsg) => void;
 
 class CollabSocket {
@@ -10,6 +14,7 @@ class CollabSocket {
   private joinPayload: CollabClientMsg | null = null;
 
   connect(roomId: string, joinMsg: CollabClientMsg): void {
+    if (!COLLAB_ENABLED) return;
     this.disconnect();
     this.roomId     = roomId;
     this.joinPayload = joinMsg;
@@ -52,7 +57,7 @@ class CollabSocket {
   }
 
   send(msg: CollabClientMsg): void {
-    if (this.socket?.readyState === WebSocket.OPEN) {
+    if (COLLAB_ENABLED && this.socket?.readyState === WebSocket.OPEN) {
       this.socket.send(JSON.stringify(msg));
     }
   }
