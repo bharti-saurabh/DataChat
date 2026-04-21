@@ -26,10 +26,17 @@ export function ChartPanel({ rows, question }: ChartPanelProps) {
 
   if (rows.length === 0 || type === "table") return null;
 
-  const handlePin = () => {
-    addDashboardChart({ id: generateId(), title: question ?? "Chart", chartCode: "", data: rows });
-    addToast?.({ variant: "success", title: "Pinned to dashboard" });
-  };
+const handlePin = () => {
+  addDashboardChart({
+    id: generateId(),
+    title: question ?? "Chart",
+    chartCode: "",
+    data: rows,
+    question,
+    chartType: type,
+  });
+  addToast?.({ variant: "success", title: "Pinned to dashboard" });
+};
 
   const chart = (h: number) => {
     switch (type) {
