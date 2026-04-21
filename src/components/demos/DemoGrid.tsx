@@ -12,7 +12,7 @@ export function DemoGrid() {
   const { addToast, setSchemas, setContext, setSuggestedQuestions, setSuggestionsLoading, llmSettings } = useDataStore();
 
   useEffect(() => {
-    fetch("/config.json")
+    fetch(`${import.meta.env.BASE_URL}config.json`)
       .then((r) => r.json())
       .then(({ demos }: { demos: DemoConfig[] }) => setDemos(demos))
       .catch(() => addToast({ variant: "error", title: "Failed to load demos" }));
