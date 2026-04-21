@@ -37,7 +37,7 @@ return new Chart(
   document.getElementById("chart"),
   {
     type: "...",
-    options: { responsive: true, ... },
+    options: { responsive: true, maintainAspectRatio: false, ... },
     data: { ... },
   }
 )
@@ -127,7 +127,9 @@ IMPORTANT: ${description}`;
         )}
 
         <div id="chart-container" className={chartCode && !error ? "block" : "hidden"}>
-          <canvas ref={canvasRef} id="chart" />
+          <div style={{ position: "relative", height: "200px" }}>
+            <canvas ref={canvasRef} id="chart" />
+          </div>
         </div>
 
         {!chartCode && !generating && (

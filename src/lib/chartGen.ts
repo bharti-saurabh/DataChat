@@ -19,7 +19,7 @@ return new Chart(
   document.getElementById("chart"),
   {
     type: "...",
-    options: { responsive: true, maintainAspectRatio: true, ... },
+    options: { responsive: true, maintainAspectRatio: false, ... },
     data: { ... },
   }
 )

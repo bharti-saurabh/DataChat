@@ -55,7 +55,7 @@ export function ResultsTable({ data }: ResultsTableProps) {
     <div className="space-y-2">
       {/* Toolbar */}
       <div className="flex items-center gap-2 flex-wrap">
-        <span className="text-xs text-gray-500">
+        <span className="text-sm text-gray-500">
           {data.length.toLocaleString()} row{data.length !== 1 ? "s" : ""}
           {filtered.length !== data.length && ` (${filtered.length.toLocaleString()} filtered)`}
         </span>
@@ -65,30 +65,30 @@ export function ResultsTable({ data }: ResultsTableProps) {
           value={searchQuery}
           onChange={(e) => setSearchQuery(e.target.value)}
           placeholder="Filter results…"
-          className="ml-auto text-xs px-2 py-1 rounded border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-900 text-gray-700 dark:text-gray-300 focus:outline-none focus:ring-1 focus:ring-blue-500 w-36"
+          className="ml-auto text-sm px-2 py-1 rounded border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-900 text-gray-700 dark:text-gray-300 focus:outline-none focus:ring-1 focus:ring-blue-500 w-40"
         />
 
         <div className="flex items-center gap-1">
           <button
             onClick={() => exportCSV(filtered)}
             title="Download CSV"
-            className="flex items-center gap-1 text-xs px-2 py-1 rounded border border-gray-200 dark:border-gray-700 hover:bg-gray-50 dark:hover:bg-gray-800 text-gray-600 dark:text-gray-400"
+            className="flex items-center gap-1 text-sm px-2 py-1 rounded border border-gray-200 dark:border-gray-700 hover:bg-gray-50 dark:hover:bg-gray-800 text-gray-600 dark:text-gray-400"
           >
-            <Download size={12} /> CSV
+            <Download size={13} /> CSV
           </button>
           <button
             onClick={() => exportExcel(filtered)}
             title="Download Excel"
-            className="flex items-center gap-1 text-xs px-2 py-1 rounded border border-gray-200 dark:border-gray-700 hover:bg-gray-50 dark:hover:bg-gray-800 text-gray-600 dark:text-gray-400"
+            className="flex items-center gap-1 text-sm px-2 py-1 rounded border border-gray-200 dark:border-gray-700 hover:bg-gray-50 dark:hover:bg-gray-800 text-gray-600 dark:text-gray-400"
           >
-            <Sheet size={12} /> Excel
+            <Sheet size={13} /> Excel
           </button>
           <button
             onClick={() => exportJSON(filtered)}
             title="Download JSON"
-            className="flex items-center gap-1 text-xs px-2 py-1 rounded border border-gray-200 dark:border-gray-700 hover:bg-gray-50 dark:hover:bg-gray-800 text-gray-600 dark:text-gray-400"
+            className="flex items-center gap-1 text-sm px-2 py-1 rounded border border-gray-200 dark:border-gray-700 hover:bg-gray-50 dark:hover:bg-gray-800 text-gray-600 dark:text-gray-400"
           >
-            <FileJson size={12} /> JSON
+            <FileJson size={13} /> JSON
           </button>
         </div>
       </div>
@@ -103,7 +103,7 @@ export function ResultsTable({ data }: ResultsTableProps) {
                   <th
                     key={header.id}
                     onClick={header.column.getToggleSortingHandler()}
-                    className="px-3 py-2 text-left text-xs font-medium text-gray-600 dark:text-gray-400 whitespace-nowrap cursor-pointer hover:bg-gray-100 dark:hover:bg-gray-700 select-none"
+                    className="px-3 py-2 text-left text-sm font-medium text-gray-600 dark:text-gray-400 whitespace-nowrap cursor-pointer hover:bg-gray-100 dark:hover:bg-gray-700 select-none"
                   >
                     <div className="flex items-center gap-1">
                       {flexRender(header.column.columnDef.header, header.getContext())}
@@ -124,7 +124,7 @@ export function ResultsTable({ data }: ResultsTableProps) {
             {table.getRowModel().rows.map((row) => (
               <tr key={row.id} className="hover:bg-gray-50 dark:hover:bg-gray-800/50">
                 {row.getVisibleCells().map((cell) => (
-                  <td key={cell.id} className="px-3 py-1.5 text-gray-700 dark:text-gray-300 text-xs max-w-[200px] overflow-hidden text-ellipsis">
+                  <td key={cell.id} className="px-3 py-2 text-gray-700 dark:text-gray-300 text-sm max-w-[200px] overflow-hidden text-ellipsis">
                     {flexRender(cell.column.columnDef.cell, cell.getContext())}
                   </td>
                 ))}
@@ -136,7 +136,7 @@ export function ResultsTable({ data }: ResultsTableProps) {
 
       {/* Pagination */}
       {table.getPageCount() > 1 && (
-        <div className="flex items-center justify-between text-xs text-gray-500">
+        <div className="flex items-center justify-between text-sm text-gray-500">
           <span>
             Page {table.getState().pagination.pageIndex + 1} of {table.getPageCount()}
           </span>

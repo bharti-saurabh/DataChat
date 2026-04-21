@@ -150,7 +150,9 @@ export function ChartDisplay({
         {execError ? (
           <div className="text-xs text-red-500 bg-red-50 dark:bg-red-950/30 rounded p-2">{execError}</div>
         ) : (
-          <canvas ref={canvasRef} id={canvasId} />
+          <div style={{ position: "relative", height: "200px" }}>
+            <canvas ref={canvasRef} id={canvasId} />
+          </div>
         )}
       </div>
     </div>
