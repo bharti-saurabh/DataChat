@@ -42,7 +42,6 @@ export function ChatPanel() {
       const result = await api.query.run({ connectionId: activeConnection.id, question: q, history });
       updateMessage(assistantId, { content: result.reasoning, sql: result.sql, rows: result.rows });
 
-      // Broadcast to room peers (fire-and-forget)
       collabSocket.send({
         type: "query_broadcast",
         user: localUser,
@@ -50,6 +49,14 @@ export function ChatPanel() {
         sql: result.sql,
         rowCount: result.rows.length,
       });
+
+      // Fetch AI insights in the background (non-blocking)
+      if (result.rows.length > 0) {
+        api.insights
+          .analyze({ question: q, sql: result.sql, rows: result.rows })
+          .then((insights) => updateMessage(assistantId, { insights }))
+          .catch(() => { /* insights are optional — silently skip on failure */ });
+      }
     } catch (e) {
       updateMessage(assistantId, { role: "error", error: String(e) });
     } finally {
@@ -60,7 +67,6 @@ export function ChatPanel() {
 
   const onInputChange = (val: string) => {
     setInput(val);
-    // Typing indicator
     collabSocket.send({ type: "typing", userId: localUser.id, isTyping: true });
     if (typingTimer.current) clearTimeout(typingTimer.current);
     typingTimer.current = setTimeout(() => {
@@ -74,7 +80,6 @@ export function ChatPanel() {
 
   return (
     <div style={{ display: "flex", flexDirection: "column", height: "100%" }}>
-      {/* Messages */}
       <div style={{ flex: 1, overflowY: "auto", padding: "1.5rem 1.25rem", display: "flex", flexDirection: "column", gap: "1.25rem" }}>
         <AnimatePresence initial={false}>
           {messages.length === 0 && (
@@ -105,7 +110,6 @@ export function ChatPanel() {
               </div>
             </motion.div>
           )}
-
           {messages.map((msg) => (
             <MessageBubble key={msg.id} message={msg} onFollowUp={submit} />
           ))}
@@ -113,7 +117,6 @@ export function ChatPanel() {
         <div ref={bottomRef} />
       </div>
 
-      {/* Input area */}
       <div style={{
         borderTop: "1px solid var(--color-border)",
         padding: "0.75rem 1rem",
@@ -154,7 +157,8 @@ export function ChatPanel() {
                 padding: "0.4rem 0.875rem", borderRadius: "0.5rem",
                 background: input.trim() && !isQuerying ? "var(--color-accent)" : "var(--color-surface-3)",
                 color: input.trim() && !isQuerying ? "#fff" : "var(--color-text-muted)",
-                fontSize: "0.8rem", fontWeight: 500, border: "none", cursor: input.trim() && !isQuerying ? "pointer" : "not-allowed",
+                fontSize: "0.8rem", fontWeight: 500, border: "none",
+                cursor: input.trim() && !isQuerying ? "pointer" : "not-allowed",
                 transition: "background var(--duration-normal), color var(--duration-normal), box-shadow var(--duration-normal)",
                 boxShadow: input.trim() && !isQuerying ? "0 0 12px var(--color-accent-glow)" : "none",
               }}
