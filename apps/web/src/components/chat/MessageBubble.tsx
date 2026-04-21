@@ -4,6 +4,7 @@ import { Bot, User, AlertCircle, ChevronDown, ChevronUp, TableIcon } from "lucid
 import { cn } from "@/lib/utils.js";
 import { ChartPanel } from "@/components/visualizations/ChartPanel.js";
 import type { ChatMessage } from "@datachat/shared";
+import { InsightsPanel } from "./InsightsPanel.js";
 
 interface MessageBubbleProps {
   message: ChatMessage;
@@ -14,8 +15,7 @@ const bubbleVariants = {
   initial: { opacity: 0, y: 10 },
   animate: { opacity: 1, y: 0, transition: { duration: 0.2, ease: "easeOut" } },
 };
-
-export function MessageBubble({ message }: MessageBubbleProps) {
+export function MessageBubble({ message, onFollowUp }: MessageBubbleProps) {
   const [sqlOpen, setSqlOpen] = useState(false);
 
   /* ── Remote user (from a collaborating peer) ── */
@@ -220,3 +220,8 @@ function Avatar({ role }: { role: "user" | "assistant" }) {
     </div>
   );
 }
+
+{/* AI Insights */}
+{message.insights && (
+  <InsightsPanel insights={message.insights} onFollowUp={onFollowUp} />
+)}
