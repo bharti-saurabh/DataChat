@@ -1,0 +1,40 @@
+@import "tailwindcss";
+
+@theme {
+  --color-primary: #2563eb;
+  --color-primary-hover: #1d4ed8;
+  --font-sans: system-ui, "Segoe UI", Roboto, sans-serif;
+  --font-mono: ui-monospace, Consolas, monospace;
+}
+
+/* Markdown content from LLM */
+.prose-sql pre {
+  @apply bg-gray-100 dark:bg-gray-800 rounded p-3 overflow-x-auto text-sm;
+}
+.prose-sql code {
+  @apply font-mono text-sm;
+}
+.prose-sql table {
+  @apply w-full text-sm border-collapse;
+}
+.prose-sql th,
+.prose-sql td {
+  @apply border border-gray-300 dark:border-gray-600 px-2 py-1;
+}
+
+/* Highlight.js theme override for dark mode */
+.hljs {
+  @apply bg-transparent;
+}
+
+/* Thin scrollbar */
+::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+::-webkit-scrollbar-track {
+  @apply bg-transparent;
+}
+::-webkit-scrollbar-thumb {
+  @apply bg-gray-300 dark:bg-gray-600 rounded-full;
+}
