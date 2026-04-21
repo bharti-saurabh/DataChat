@@ -1,5 +1,6 @@
 import { useState } from "react";
-import { Bot, User, AlertCircle, ChevronDown, ChevronUp, Loader2 } from "lucide-react";
+import { motion } from "framer-motion";
+import { Bot, User, AlertCircle, ChevronDown, ChevronUp, TableIcon } from "lucide-react";
 import { cn } from "@/lib/utils.js";
 import type { ChatMessage } from "@datachat/shared";
 
@@ -8,91 +9,176 @@ interface MessageBubbleProps {
   onFollowUp: (q: string) => void;
 }
 
-export function MessageBubble({ message, onFollowUp }: MessageBubbleProps) {
+const bubbleVariants = {
+  initial: { opacity: 0, y: 10 },
+  animate: { opacity: 1, y: 0, transition: { duration: 0.2, ease: "easeOut" } },
+};
+
+export function MessageBubble({ message }: MessageBubbleProps) {
   const [sqlOpen, setSqlOpen] = useState(false);
 
+  /* ── User ── */
   if (message.role === "user") {
     return (
-      <div className="flex gap-3 justify-end">
-        <div className="max-w-[75%] bg-[var(--color-accent)] rounded-2xl rounded-tr-sm px-4 py-2.5">
-          <p className="text-sm text-white whitespace-pre-wrap">{message.question}</p>
+      <motion.div className="flex gap-3 justify-end" {...bubbleVariants}>
+        <div style={{
+          maxWidth: "72%",
+          background: "linear-gradient(135deg, var(--color-accent-dim) 0%, var(--color-accent) 100%)",
+          borderRadius: "1rem 1rem 0.25rem 1rem",
+          padding: "0.625rem 1rem",
+          boxShadow: "0 2px 16px var(--color-accent-glow)",
+        }}>
+          <p style={{ fontSize: "0.875rem", color: "#fff", whiteSpace: "pre-wrap", lineHeight: 1.55 }}>
+            {message.question}
+          </p>
         </div>
-        <div className="w-7 h-7 rounded-full bg-[var(--color-surface-2)] flex items-center justify-center shrink-0 mt-1">
-          <User size={14} className="text-[var(--color-accent)]" />
-        </div>
-      </div>
+        <Avatar role="user" />
+      </motion.div>
     );
   }
 
+  /* ── Thinking ── */
   if (!message.content && !message.error && message.role === "assistant") {
     return (
-      <div className="flex gap-3">
-        <BotAvatar />
-        <div className="flex items-center gap-2 text-sm text-[var(--color-text-muted)]">
-          <Loader2 size={14} className="animate-spin" /> Thinking…
+      <motion.div className="flex gap-3" {...bubbleVariants}>
+        <Avatar role="assistant" />
+        <div style={{
+          display: "flex", alignItems: "center", gap: "0.375rem",
+          padding: "0.625rem 0.875rem",
+          borderRadius: "0.25rem 1rem 1rem 1rem",
+          background: "var(--color-surface-2)",
+          border: "1px solid var(--color-border)",
+        }}>
+          <div className="thinking-dot" />
+          <div className="thinking-dot" />
+          <div className="thinking-dot" />
         </div>
-      </div>
+      </motion.div>
     );
   }
 
+  /* ── Error ── */
   if (message.role === "error" || message.error) {
     return (
-      <div className="flex gap-3">
-        <BotAvatar />
-        <div className="flex items-start gap-2 rounded-lg bg-[var(--color-error)]/10 border border-[var(--color-error)]/30 px-3 py-2 text-sm text-[var(--color-error)]">
-          <AlertCircle size={14} className="mt-0.5 shrink-0" />
+      <motion.div className="flex gap-3" {...bubbleVariants}>
+        <Avatar role="assistant" />
+        <div style={{
+          display: "flex", alignItems: "flex-start", gap: "0.5rem",
+          padding: "0.625rem 0.875rem",
+          borderRadius: "0.25rem 1rem 1rem 1rem",
+          background: "rgba(248,113,113,0.06)",
+          border: "1px solid rgba(248,113,113,0.2)",
+          fontSize: "0.875rem",
+          color: "var(--color-error)",
+          maxWidth: "80%",
+        }}>
+          <AlertCircle size={14} style={{ marginTop: 2, flexShrink: 0 }} />
           {message.error}
         </div>
-      </div>
+      </motion.div>
     );
   }
 
+  /* ── Assistant ── */
   return (
-    <div className="flex gap-3">
-      <BotAvatar />
-      <div className="flex-1 min-w-0 space-y-3">
-        {/* Reasoning */}
+    <motion.div className="flex gap-3" {...bubbleVariants}>
+      <Avatar role="assistant" />
+      <div style={{ flex: 1, minWidth: 0, display: "flex", flexDirection: "column", gap: "0.625rem" }}>
+
+        {/* Reasoning text */}
         {message.content && (
-          <p className="text-sm text-[var(--color-text-secondary)] leading-relaxed">{message.content}</p>
+          <div style={{
+            padding: "0.75rem 1rem",
+            borderRadius: "0.25rem 1rem 1rem 1rem",
+            background: "var(--color-surface-2)",
+            border: "1px solid var(--color-border)",
+            fontSize: "0.875rem",
+            color: "var(--color-text-secondary)",
+            lineHeight: 1.6,
+          }}>
+            {message.content}
+          </div>
         )}
 
-        {/* SQL */}
+        {/* SQL pill */}
         {message.sql && (
           <div>
             <button
               onClick={() => setSqlOpen((v) => !v)}
-              className={cn(
-                "flex items-center gap-2 px-3 py-1.5 rounded-lg text-xs font-mono transition-colors",
-                "bg-[var(--color-surface-2)] border border-[var(--color-border)] text-[var(--color-text-secondary)]",
-                "hover:border-[var(--color-accent)] hover:text-[var(--color-accent)]",
-              )}
+              style={{
+                display: "inline-flex", alignItems: "center", gap: "0.5rem",
+                padding: "0.3rem 0.75rem",
+                borderRadius: 9999,
+                background: "var(--color-surface-3)",
+                border: "1px solid var(--color-border)",
+                cursor: "pointer",
+                fontSize: "0.75rem",
+                fontFamily: "var(--font-mono)",
+                color: "var(--color-cyan)",
+                transition: "border-color var(--duration-normal)",
+              }}
+              onMouseEnter={(e) => (e.currentTarget.style.borderColor = "var(--color-cyan)")}
+              onMouseLeave={(e) => (e.currentTarget.style.borderColor = "var(--color-border)")}
             >
-              <code className="truncate max-w-[280px]">{message.sql.split("\n")[0]}</code>
+              <code style={{ maxWidth: 260, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+                {message.sql.split("\n")[0]}
+              </code>
               {sqlOpen ? <ChevronUp size={11} /> : <ChevronDown size={11} />}
             </button>
+
             {sqlOpen && (
-              <pre className="mt-2 p-3 rounded-lg bg-[var(--color-surface-2)] border border-[var(--color-border)] text-xs text-[var(--color-cyan)] font-mono overflow-x-auto">
+              <motion.pre
+                initial={{ opacity: 0, height: 0 }}
+                animate={{ opacity: 1, height: "auto" }}
+                exit={{ opacity: 0, height: 0 }}
+                style={{
+                  marginTop: "0.375rem",
+                  padding: "0.75rem 1rem",
+                  borderRadius: "0.625rem",
+                  background: "var(--color-surface-3)",
+                  border: "1px solid var(--color-border)",
+                  fontSize: "0.75rem",
+                  fontFamily: "var(--font-mono)",
+                  color: "var(--color-cyan)",
+                  overflowX: "auto",
+                  lineHeight: 1.7,
+                }}
+              >
                 {message.sql}
-              </pre>
+              </motion.pre>
             )}
           </div>
         )}
 
-        {/* Result summary */}
+        {/* Row count badge */}
         {message.rows && message.rows.length > 0 && (
-          <p className="text-xs text-[var(--color-text-muted)]">
-            {message.rows.length.toLocaleString()} row{message.rows.length !== 1 ? "s" : ""} returned
-          </p>
+          <div style={{ display: "flex", alignItems: "center", gap: "0.375rem" }}>
+            <TableIcon size={12} style={{ color: "var(--color-text-muted)" }} />
+            <span style={{ fontSize: "0.75rem", color: "var(--color-text-muted)" }}>
+              {message.rows.length.toLocaleString()} row{message.rows.length !== 1 ? "s" : ""}
+            </span>
+          </div>
         )}
       </div>
-    </div>
+    </motion.div>
   );
 }
 
-function BotAvatar() {
+function Avatar({ role }: { role: "user" | "assistant" }) {
   return (
-    <div className="w-7 h-7 rounded-full bg-[var(--color-accent-glow)] border border-[var(--color-border-glow)] flex items-center justify-center shrink-0 mt-1">
-      <Bot size={14} className="text-[var(--color-accent)]" />
+    <div style={{
+      width: 28, height: 28, borderRadius: "50%", flexShrink: 0, marginTop: 4,
+      display: "flex", alignItems: "center", justifyContent: "center",
+      background: role === "user"
+        ? "var(--color-accent-pale)"
+        : "linear-gradient(135deg, var(--color-accent-pale), var(--color-cyan-pale))",
+      border: "1px solid",
+      borderColor: role === "user" ? "var(--color-accent-dim)" : "var(--color-border-glow)",
+    }}>
+      {role === "user"
+        ? <User size={13} style={{ color: "var(--color-accent)" }} />
+        : <Bot  size={13} style={{ color: "var(--color-cyan)" }} />
+      }
     </div>
   );
 }

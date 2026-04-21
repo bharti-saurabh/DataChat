@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
-import { Plus, Trash2, Plug, CheckCircle, XCircle, Loader2 } from "lucide-react";
+import { motion, AnimatePresence } from "framer-motion";
+import { Plus, Trash2, Plug, CheckCircle, XCircle, Loader2, ChevronRight } from "lucide-react";
 import { api } from "@/lib/api.js";
 import { cn } from "@/lib/utils.js";
 import { useStore } from "@/store/useStore.js";
@@ -8,15 +9,24 @@ import type { ConnectionConfig, DBType } from "@datachat/shared";
 
 const DB_TYPES: DBType[] = ["postgres", "mysql", "sqlite", "bigquery", "snowflake"];
 
+const DB_META: Record<DBType, { color: string; label: string }> = {
+  postgres:  { color: "#3b82f6", label: "PostgreSQL" },
+  mysql:     { color: "#f59e0b", label: "MySQL" },
+  sqlite:    { color: "#22d3ee", label: "SQLite" },
+  bigquery:  { color: "#34d399", label: "BigQuery" },
+  snowflake: { color: "#a78bfa", label: "Snowflake" },
+};
+
 const emptyForm: ConnectionConfig = {
-  label: "",
-  type: "postgres",
-  host: "localhost",
-  port: 5432,
-  database: "",
-  user: "",
-  password: "",
-  ssl: false,
+  label: "", type: "postgres",
+  host: "localhost", port: 5432,
+  database: "", user: "", password: "", ssl: false,
+};
+
+const cardVariants = {
+  initial: { opacity: 0, y: 8 },
+  animate: (i: number) => ({ opacity: 1, y: 0, transition: { duration: 0.18, delay: i * 0.05 } }),
+  exit: { opacity: 0, x: -16, transition: { duration: 0.15 } },
 };
 
 export function ConnectionsPage() {
@@ -26,6 +36,8 @@ export function ConnectionsPage() {
 
   const [form, setForm] = useState<ConnectionConfig>(emptyForm);
   const [showForm, setShowForm] = useState(false);
+  const [testingId, setTestingId] = useState<string | null>(null);
+  const [testResult, setTestResult] = useState<{ id: string; ok: boolean; error?: string } | null>(null);
 
   const { data: connections = [], isLoading } = useQuery({
     queryKey: ["connections"],
@@ -42,152 +54,210 @@ export function ConnectionsPage() {
     onSuccess: () => qc.invalidateQueries({ queryKey: ["connections"] }),
   });
 
-  const testMutation = useMutation({ mutationFn: api.connections.test });
+  const testConnection = async (id: string) => {
+    setTestingId(id);
+    setTestResult(null);
+    try {
+      const res = await api.connections.test(id);
+      setTestResult({ id, ...res });
+    } finally {
+      setTestingId(null);
+    }
+  };
 
   return (
-    <div className="p-6 max-w-3xl mx-auto space-y-6">
-      <div className="flex items-center justify-between">
+    <div style={{ padding: "1.5rem", maxWidth: 720, margin: "0 auto", display: "flex", flexDirection: "column", gap: "1.5rem", overflowY: "auto", height: "100%" }}>
+
+      {/* Header */}
+      <div style={{ display: "flex", alignItems: "flex-start", justifyContent: "space-between" }}>
         <div>
-          <h2 className="text-lg font-semibold text-[var(--color-text-primary)]">Connections</h2>
-          <p className="text-sm text-[var(--color-text-muted)] mt-0.5">Manage your database connections</p>
+          <h2 style={{ fontSize: "1rem", fontWeight: 600, color: "var(--color-text-primary)" }}>Database connections</h2>
+          <p style={{ fontSize: "0.8rem", color: "var(--color-text-muted)", marginTop: "0.2rem" }}>
+            Connect to PostgreSQL, MySQL, Snowflake, BigQuery, or SQLite
+          </p>
         </div>
-        <button
+        <motion.button
+          whileHover={{ scale: 1.02 }}
+          whileTap={{ scale: 0.96 }}
           onClick={() => setShowForm((v) => !v)}
-          className="flex items-center gap-2 px-3 py-2 rounded-lg bg-[var(--color-accent)] hover:bg-[var(--color-accent-dim)] text-white text-sm transition-colors"
+          className="btn-primary"
         >
-          <Plus size={15} /> New connection
-        </button>
+          <Plus size={14} /> New connection
+        </motion.button>
       </div>
 
       {/* New connection form */}
-      {showForm && (
-        <div className="glass rounded-xl p-5 space-y-4">
-          <h3 className="text-sm font-medium text-[var(--color-text-primary)]">New Connection</h3>
-          <div className="grid grid-cols-2 gap-3">
-            <Field label="Label">
-              <Input value={form.label} onChange={(v) => setForm((f) => ({ ...f, label: v }))} placeholder="My Postgres DB" />
-            </Field>
-            <Field label="Type">
-              <select
-                value={form.type}
-                onChange={(e) => setForm((f) => ({ ...f, type: e.target.value as DBType }))}
-                className="input-base"
+      <AnimatePresence>
+        {showForm && (
+          <motion.div
+            initial={{ opacity: 0, y: -8, scale: 0.98 }}
+            animate={{ opacity: 1, y: 0, scale: 1 }}
+            exit={{ opacity: 0, y: -8, scale: 0.98 }}
+            transition={{ duration: 0.18 }}
+            className="glass"
+            style={{ borderRadius: "0.875rem", padding: "1.25rem", display: "flex", flexDirection: "column", gap: "1rem" }}
+          >
+            <h3 style={{ fontSize: "0.875rem", fontWeight: 600, color: "var(--color-text-primary)" }}>New connection</h3>
+
+            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "0.75rem" }}>
+              <Field label="Label">
+                <input className="input-base" value={form.label} onChange={(e) => setForm((f) => ({ ...f, label: e.target.value }))} placeholder="My Postgres DB" />
+              </Field>
+              <Field label="Type">
+                <select className="input-base" value={form.type} onChange={(e) => setForm((f) => ({ ...f, type: e.target.value as DBType }))}>
+                  {DB_TYPES.map((t) => <option key={t} value={t}>{DB_META[t].label}</option>)}
+                </select>
+              </Field>
+              <Field label="Host">
+                <input className="input-base" value={form.host ?? ""} onChange={(e) => setForm((f) => ({ ...f, host: e.target.value }))} placeholder="localhost" />
+              </Field>
+              <Field label="Port">
+                <input className="input-base" type="number" value={form.port ?? ""} onChange={(e) => setForm((f) => ({ ...f, port: Number(e.target.value) }))} placeholder="5432" />
+              </Field>
+              <Field label="Database">
+                <input className="input-base" value={form.database ?? ""} onChange={(e) => setForm((f) => ({ ...f, database: e.target.value }))} />
+              </Field>
+              <Field label="User">
+                <input className="input-base" value={form.user ?? ""} onChange={(e) => setForm((f) => ({ ...f, user: e.target.value }))} />
+              </Field>
+              <Field label="Password" style={{ gridColumn: "1 / -1" }}>
+                <input className="input-base" type="password" value={form.password ?? ""} onChange={(e) => setForm((f) => ({ ...f, password: e.target.value }))} />
+              </Field>
+            </div>
+
+            <div style={{ display: "flex", gap: "0.5rem", justifyContent: "flex-end" }}>
+              <button className="btn-ghost" onClick={() => setShowForm(false)}>Cancel</button>
+              <button
+                className="btn-primary"
+                onClick={() => createMutation.mutate(form)}
+                disabled={!form.label || createMutation.isPending}
               >
-                {DB_TYPES.map((t) => <option key={t} value={t}>{t}</option>)}
-              </select>
-            </Field>
-            <Field label="Host">
-              <Input value={form.host ?? ""} onChange={(v) => setForm((f) => ({ ...f, host: v }))} placeholder="localhost" />
-            </Field>
-            <Field label="Port">
-              <Input value={String(form.port ?? "")} onChange={(v) => setForm((f) => ({ ...f, port: Number(v) }))} placeholder="5432" />
-            </Field>
-            <Field label="Database">
-              <Input value={form.database ?? ""} onChange={(v) => setForm((f) => ({ ...f, database: v }))} />
-            </Field>
-            <Field label="User">
-              <Input value={form.user ?? ""} onChange={(v) => setForm((f) => ({ ...f, user: v }))} />
-            </Field>
-            <Field label="Password" className="col-span-2">
-              <Input type="password" value={form.password ?? ""} onChange={(v) => setForm((f) => ({ ...f, password: v }))} />
-            </Field>
-          </div>
-          <div className="flex gap-2 justify-end">
-            <button onClick={() => setShowForm(false)} className="btn-ghost">Cancel</button>
-            <button
-              onClick={() => createMutation.mutate(form)}
-              disabled={!form.label || createMutation.isPending}
-              className="btn-primary"
-            >
-              {createMutation.isPending ? <Loader2 size={14} className="animate-spin" /> : null}
-              Save
-            </button>
-          </div>
-        </div>
-      )}
+                {createMutation.isPending && <Loader2 size={13} style={{ animation: "spin 1s linear infinite" }} />}
+                Save connection
+              </button>
+            </div>
+          </motion.div>
+        )}
+      </AnimatePresence>
 
       {/* Connection list */}
       {isLoading ? (
-        <div className="flex items-center gap-2 text-[var(--color-text-muted)] text-sm">
-          <Loader2 size={14} className="animate-spin" /> Loading…
+        <div style={{ display: "flex", flexDirection: "column", gap: "0.5rem" }}>
+          {[1, 2].map((i) => <div key={i} className="skeleton" style={{ height: 64, borderRadius: "0.75rem" }} />)}
         </div>
       ) : connections.length === 0 ? (
-        <p className="text-[var(--color-text-muted)] text-sm">No connections yet.</p>
+        <p style={{ fontSize: "0.875rem", color: "var(--color-text-muted)" }}>No connections yet — add one above.</p>
       ) : (
-        <div className="space-y-2">
-          {connections.map((conn) => (
-            <div
-              key={conn.id}
-              className={cn(
-                "glass rounded-xl px-4 py-3 flex items-center gap-3 transition-all cursor-pointer",
-                activeConnection?.id === conn.id && "glass-glow border-[var(--color-accent)]",
-              )}
-              onClick={() => setActiveConnection(conn)}
-            >
-              <div className="flex-1 min-w-0">
-                <p className="text-sm font-medium text-[var(--color-text-primary)] truncate">{conn.label}</p>
-                <p className="text-xs text-[var(--color-text-muted)]">{conn.type}</p>
-              </div>
+        <div style={{ display: "flex", flexDirection: "column", gap: "0.5rem" }}>
+          <AnimatePresence>
+            {connections.map((conn, i) => {
+              const meta = DB_META[conn.type as DBType] ?? { color: "var(--color-accent)", label: conn.type };
+              const isActive = activeConnection?.id === conn.id;
+              const testRes = testResult?.id === conn.id ? testResult : null;
 
-              {activeConnection?.id === conn.id && (
-                <span className="text-xs text-[var(--color-accent)] font-medium">active</span>
-              )}
+              return (
+                <motion.div
+                  key={conn.id}
+                  custom={i}
+                  variants={cardVariants}
+                  initial="initial"
+                  animate="animate"
+                  exit="exit"
+                  onClick={() => setActiveConnection(conn)}
+                  style={{
+                    display: "flex", alignItems: "center", gap: "0.875rem",
+                    padding: "0.75rem 1rem",
+                    borderRadius: "0.75rem",
+                    background: "color-mix(in srgb, var(--color-surface-2) 90%, transparent)",
+                    border: `1px solid ${isActive ? meta.color + "66" : "var(--color-border)"}`,
+                    boxShadow: isActive ? `0 0 20px ${meta.color}18` : "none",
+                    cursor: "pointer",
+                    transition: "border-color var(--duration-normal), box-shadow var(--duration-normal)",
+                    position: "relative",
+                    overflow: "hidden",
+                  }}
+                  whileHover={{ borderColor: meta.color + "44" }}
+                >
+                  {/* DB type colour bar */}
+                  <div style={{
+                    position: "absolute", left: 0, top: 0, bottom: 0, width: 3,
+                    background: meta.color,
+                    opacity: isActive ? 1 : 0.4,
+                    borderRadius: "0.75rem 0 0 0.75rem",
+                  }} />
 
-              <button
-                onClick={(e) => { e.stopPropagation(); testMutation.mutate(conn.id); }}
-                title="Test connection"
-                className="p-1.5 rounded hover:bg-[var(--color-surface-2)] text-[var(--color-text-muted)] hover:text-[var(--color-text-primary)] transition-colors"
-              >
-                {testMutation.isPending ? <Loader2 size={14} className="animate-spin" /> : <Plug size={14} />}
-              </button>
+                  {/* DB type badge */}
+                  <div style={{
+                    width: 36, height: 36, borderRadius: "0.5rem", flexShrink: 0,
+                    background: meta.color + "18",
+                    border: `1px solid ${meta.color}30`,
+                    display: "flex", alignItems: "center", justifyContent: "center",
+                    marginLeft: "0.25rem",
+                  }}>
+                    <span style={{ fontSize: "0.6rem", fontWeight: 700, letterSpacing: "0.04em", color: meta.color }}>
+                      {conn.type.slice(0, 2).toUpperCase()}
+                    </span>
+                  </div>
 
-              <button
-                onClick={(e) => { e.stopPropagation(); deleteMutation.mutate(conn.id); }}
-                title="Delete"
-                className="p-1.5 rounded hover:bg-[var(--color-surface-2)] text-[var(--color-text-muted)] hover:text-[var(--color-error)] transition-colors"
-              >
-                <Trash2 size={14} />
-              </button>
-            </div>
-          ))}
-        </div>
-      )}
+                  {/* Labels */}
+                  <div style={{ flex: 1, minWidth: 0 }}>
+                    <p style={{ fontSize: "0.875rem", fontWeight: 500, color: "var(--color-text-primary)", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+                      {conn.label}
+                    </p>
+                    <p style={{ fontSize: "0.75rem", color: "var(--color-text-muted)" }}>{meta.label}</p>
+                  </div>
 
-      {/* Test result */}
-      {testMutation.data && (
-        <div className={cn(
-          "flex items-center gap-2 text-sm rounded-lg px-3 py-2",
-          testMutation.data.ok
-            ? "bg-[var(--color-success)]/10 text-[var(--color-success)]"
-            : "bg-[var(--color-error)]/10 text-[var(--color-error)]",
-        )}>
-          {testMutation.data.ok ? <CheckCircle size={14} /> : <XCircle size={14} />}
-          {testMutation.data.ok ? "Connection successful" : testMutation.data.error}
+                  {/* Active badge */}
+                  {isActive && (
+                    <span className="tag" style={{ color: meta.color, borderColor: meta.color + "55", fontSize: "0.65rem" }}>
+                      active
+                    </span>
+                  )}
+
+                  {/* Test result */}
+                  {testRes && (
+                    testRes.ok
+                      ? <CheckCircle size={14} style={{ color: "var(--color-success)", flexShrink: 0 }} />
+                      : <XCircle size={14} style={{ color: "var(--color-error)", flexShrink: 0 }} />
+                  )}
+
+                  {/* Actions */}
+                  <div style={{ display: "flex", gap: "0.25rem" }} onClick={(e) => e.stopPropagation()}>
+                    <button
+                      className="btn-icon"
+                      title="Test connection"
+                      onClick={() => testConnection(conn.id)}
+                    >
+                      {testingId === conn.id ? <Loader2 size={14} style={{ animation: "spin 1s linear infinite" }} /> : <Plug size={14} />}
+                    </button>
+                    <button
+                      className="btn-icon"
+                      title="Delete"
+                      onClick={() => deleteMutation.mutate(conn.id)}
+                      style={{ color: "var(--color-text-muted)" }}
+                      onMouseEnter={(e) => (e.currentTarget.style.color = "var(--color-error)")}
+                      onMouseLeave={(e) => (e.currentTarget.style.color = "var(--color-text-muted)")}
+                    >
+                      <Trash2 size={14} />
+                    </button>
+                  </div>
+
+                  <ChevronRight size={14} style={{ color: "var(--color-text-dim)", flexShrink: 0 }} />
+                </motion.div>
+              );
+            })}
+          </AnimatePresence>
         </div>
       )}
     </div>
   );
 }
 
-function Field({ label, children, className }: { label: string; children: React.ReactNode; className?: string }) {
+function Field({ label, children, style }: { label: string; children: React.ReactNode; style?: React.CSSProperties }) {
   return (
-    <label className={cn("flex flex-col gap-1", className)}>
-      <span className="text-xs text-[var(--color-text-muted)]">{label}</span>
+    <label style={{ display: "flex", flexDirection: "column", gap: "0.3rem", ...style }}>
+      <span style={{ fontSize: "0.75rem", color: "var(--color-text-muted)", letterSpacing: "0.03em" }}>{label}</span>
       {children}
     </label>
-  );
-}
-
-function Input({ value, onChange, placeholder, type = "text" }: {
-  value: string; onChange: (v: string) => void; placeholder?: string; type?: string;
-}) {
-  return (
-    <input
-      type={type}
-      value={value}
-      onChange={(e) => onChange(e.target.value)}
-      placeholder={placeholder}
-      className="input-base"
-    />
   );
 }

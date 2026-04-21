@@ -1,6 +1,7 @@
+import { motion } from "framer-motion";
 import { useStore } from "@/store/useStore.js";
 import { ChatPanel } from "@/components/chat/ChatPanel.js";
-import { Database } from "lucide-react";
+import { Database, ArrowRight } from "lucide-react";
 import { Link } from "react-router-dom";
 
 export function ChatPage() {
@@ -8,21 +9,37 @@ export function ChatPage() {
 
   if (!activeConnection) {
     return (
-      <div className="flex flex-col items-center justify-center h-full gap-4 text-center">
-        <div className="w-14 h-14 rounded-2xl bg-[var(--color-surface-2)] glass flex items-center justify-center">
-          <Database size={24} className="text-[var(--color-accent)]" />
-        </div>
+      <div style={{ display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", height: "100%", gap: "1.5rem", textAlign: "center", padding: "2rem" }}>
+        <motion.div
+          animate={{ y: [0, -6, 0] }}
+          transition={{ duration: 3, repeat: Infinity, ease: "easeInOut" }}
+          style={{
+            width: 56, height: 56, borderRadius: 18,
+            background: "var(--color-surface-2)",
+            border: "1px solid var(--color-border)",
+            display: "flex", alignItems: "center", justifyContent: "center",
+            boxShadow: "0 0 32px var(--color-accent-glow)",
+          }}
+        >
+          <Database size={24} style={{ color: "var(--color-accent)" }} />
+        </motion.div>
+
         <div>
-          <h2 className="text-lg font-semibold text-[var(--color-text-primary)]">No connection active</h2>
-          <p className="text-sm text-[var(--color-text-muted)] mt-1">
+          <h2 style={{ fontSize: "1.1rem", fontWeight: 600, color: "var(--color-text-primary)" }}>No connection active</h2>
+          <p style={{ fontSize: "0.875rem", color: "var(--color-text-muted)", marginTop: "0.375rem" }}>
             Connect to a database to start chatting with your data.
           </p>
         </div>
-        <Link
-          to="/connections"
-          className="px-4 py-2 rounded-lg bg-[var(--color-accent)] hover:bg-[var(--color-accent-dim)] text-white text-sm transition-colors"
-        >
-          Manage connections
+
+        <Link to="/connections" style={{ textDecoration: "none" }}>
+          <motion.div
+            whileHover={{ scale: 1.03 }}
+            whileTap={{ scale: 0.97 }}
+            className="btn-primary"
+            style={{ display: "inline-flex", gap: "0.375rem", alignItems: "center" }}
+          >
+            Manage connections <ArrowRight size={14} />
+          </motion.div>
         </Link>
       </div>
     );
