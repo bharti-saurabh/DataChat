@@ -4,6 +4,7 @@ import { logger } from "hono/logger";
 import { health } from "./health.js";
 import { connections } from "./connections.js";
 import { query } from "./query.js";
+import { insights } from "./insights.js";
 
 export const app = new Hono();
 
@@ -13,6 +14,7 @@ app.use("*", logger());
 app.route("/health", health);
 app.route("/connections", connections);
 app.route("/query", query);
+app.route("/insights", insights);
 
 app.onError((err, c) => {
   console.error(err);
