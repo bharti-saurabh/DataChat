@@ -25,6 +25,9 @@ interface State {
   // Loading
   isQuerying: boolean;
   setIsQuerying: (v: boolean) => void;
+
+  // Toasts
+  addToast?: (t: { variant: "success" | "error" | "warning"; title: string; message?: string }) => void;
 }
 
 export const useStore = create<State>()(
@@ -51,5 +54,7 @@ export const useStore = create<State>()(
 
     isQuerying: false,
     setIsQuerying: (v) => set((s) => { s.isQuerying = v; }),
+
+    addToast: (t) => { console.info(`[toast] ${t.variant}: ${t.title}`, t.message ?? ""); },
   })),
 );

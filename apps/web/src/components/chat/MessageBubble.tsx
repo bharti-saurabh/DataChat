@@ -2,6 +2,7 @@ import { useState } from "react";
 import { motion } from "framer-motion";
 import { Bot, User, AlertCircle, ChevronDown, ChevronUp, TableIcon } from "lucide-react";
 import { cn } from "@/lib/utils.js";
+import { ChartPanel } from "@/components/visualizations/ChartPanel.js";
 import type { ChatMessage } from "@datachat/shared";
 
 interface MessageBubbleProps {
@@ -148,6 +149,11 @@ export function MessageBubble({ message }: MessageBubbleProps) {
               </motion.pre>
             )}
           </div>
+        )}
+
+        {/* Chart */}
+        {message.rows && message.rows.length > 0 && (
+          <ChartPanel rows={message.rows} question={message.question} />
         )}
 
         {/* Row count badge */}
