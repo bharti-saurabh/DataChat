@@ -18,7 +18,39 @@ const bubbleVariants = {
 export function MessageBubble({ message }: MessageBubbleProps) {
   const [sqlOpen, setSqlOpen] = useState(false);
 
-  /* ── User ── */
+  /* ── Remote user (from a collaborating peer) ── */
+  if (message.role === "user" && message.authorId) {
+    const color = message.authorColor ?? "var(--color-accent)";
+    return (
+      <motion.div className="flex gap-3" {...bubbleVariants}>
+        {/* Peer avatar */}
+        <div title={message.authorName} style={{
+          width: 28, height: 28, borderRadius: "50%", flexShrink: 0, marginTop: 4,
+          background: color + "22", border: `2px solid ${color}99`,
+          display: "flex", alignItems: "center", justifyContent: "center",
+          fontSize: "0.6rem", fontWeight: 700, color,
+        }}>
+          {(message.authorName ?? "?").slice(0, 2).toUpperCase()}
+        </div>
+        <div style={{ maxWidth: "72%" }}>
+          <p style={{ fontSize: "0.65rem", color: "var(--color-text-muted)", marginBottom: "0.25rem" }}>
+            {message.authorName}
+          </p>
+          <div style={{
+            background: color + "18", border: `1px solid ${color}33`,
+            borderRadius: "0.25rem 1rem 1rem 1rem",
+            padding: "0.5rem 0.875rem",
+          }}>
+            <p style={{ fontSize: "0.875rem", color: "var(--color-text-primary)", lineHeight: 1.55 }}>
+              {message.question}
+            </p>
+          </div>
+        </div>
+      </motion.div>
+    );
+  }
+
+  /* ── Local user ── */
   if (message.role === "user") {
     return (
       <motion.div className="flex gap-3 justify-end" {...bubbleVariants}>

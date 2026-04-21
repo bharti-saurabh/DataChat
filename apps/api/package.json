@@ -10,12 +10,14 @@
   },
   "dependencies": {
     "@datachat/shared": "workspace:*",
-    "@hono/node-server": "^1.13.0",
+    "@hono/node-server": "^2.0.0",
     "@hono/zod-validator": "^0.7.6",
+    "@types/ws": "^8.18.1",
     "dotenv": "^16.4.0",
     "hono": "^4.7.0",
     "mysql2": "^3.11.0",
     "pg": "^8.13.0",
+    "ws": "^8.20.0",
     "zod": "^3.24.0"
   },
   "devDependencies": {

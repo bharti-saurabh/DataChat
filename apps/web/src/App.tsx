@@ -4,6 +4,7 @@ import { AppShell } from "@/components/layout/AppShell.js";
 import { ChatPage } from "@/pages/ChatPage.js";
 import { ConnectionsPage } from "@/pages/ConnectionsPage.js";
 import { DashboardPage } from "@/pages/DashboardPage.js";
+import { useCollaboration } from "@/hooks/useCollaboration.js";
 
 const pageVariants = {
   initial: { opacity: 0, y: 8 },
@@ -27,9 +28,15 @@ function AnimatedRoutes() {
   );
 }
 
+function CollabProvider() {
+  useCollaboration();
+  return null;
+}
+
 export function App() {
   return (
     <AppShell>
+      <CollabProvider />
       <AnimatedRoutes />
     </AppShell>
   );

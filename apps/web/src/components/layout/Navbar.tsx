@@ -1,6 +1,8 @@
 import { useLocation } from "react-router-dom";
 import { motion, AnimatePresence } from "framer-motion";
 import { useStore } from "@/store/useStore.js";
+import { PresenceBar } from "@/components/collaboration/PresenceBar.js";
+import { SessionShare } from "@/components/collaboration/SessionShare.js";
 
 const DB_COLORS: Record<string, string> = {
   postgres:  "#3b82f6",
@@ -25,16 +27,12 @@ export function Navbar() {
   return (
     <header style={{
       height: 48,
-      display: "flex",
-      alignItems: "center",
-      paddingInline: "1.25rem",
-      gap: "0.75rem",
+      display: "flex", alignItems: "center",
+      paddingInline: "1.25rem", gap: "0.75rem",
       borderBottom: "1px solid var(--color-border)",
       background: "color-mix(in srgb, var(--color-surface) 80%, transparent)",
       backdropFilter: "blur(16px)",
-      flexShrink: 0,
-      position: "relative",
-      zIndex: 9,
+      flexShrink: 0, position: "relative", zIndex: 9,
     }}>
       {/* Page title */}
       <div style={{ display: "flex", alignItems: "baseline", gap: "0.625rem" }}>
@@ -48,6 +46,12 @@ export function Navbar() {
 
       <div style={{ flex: 1 }} />
 
+      {/* Presence avatars */}
+      <PresenceBar />
+
+      {/* Room share pill */}
+      {pathname === "/chat" && <SessionShare />}
+
       {/* Active connection pill */}
       <AnimatePresence>
         {activeConnection && (
@@ -58,18 +62,13 @@ export function Navbar() {
             exit={{ opacity: 0, scale: 0.9 }}
             transition={{ duration: 0.15 }}
             style={{
-              display: "flex",
-              alignItems: "center",
-              gap: "0.5rem",
-              padding: "0.2rem 0.625rem",
-              borderRadius: 9999,
+              display: "flex", alignItems: "center", gap: "0.5rem",
+              padding: "0.2rem 0.625rem", borderRadius: 9999,
               border: "1px solid var(--color-border)",
               background: "var(--color-surface-2)",
-              fontSize: "0.75rem",
-              color: "var(--color-text-secondary)",
+              fontSize: "0.75rem", color: "var(--color-text-secondary)",
             }}
           >
-            {/* Pulsing status dot */}
             <span style={{ position: "relative", width: 6, height: 6 }}>
               <span style={{
                 position: "absolute", inset: 0, borderRadius: "50%",
@@ -79,11 +78,9 @@ export function Navbar() {
             </span>
             <span>{activeConnection.label}</span>
             <span style={{
-              padding: "0 0.375rem",
-              borderRadius: 4,
+              padding: "0 0.375rem", borderRadius: 4,
               background: "var(--color-surface-3)",
-              fontSize: "0.65rem",
-              letterSpacing: "0.06em",
+              fontSize: "0.65rem", letterSpacing: "0.06em",
               color: DB_COLORS[activeConnection.type] ?? "var(--color-text-muted)",
               fontWeight: 500,
             }}>

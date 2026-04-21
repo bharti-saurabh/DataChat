@@ -48,7 +48,33 @@ export interface ChatMessage {
   rows?: Record<string, unknown>[];
   error?: string;
   timestamp: number;
+  // Collaboration — set when message originated from a remote peer
+  authorId?: string;
+  authorName?: string;
+  authorColor?: string;
 }
+
+// ── Collaboration ──────────────────────────────────────────────────────────
+
+export interface CollabUser {
+  id: string;
+  name: string;
+  color: string;
+}
+
+// Messages sent client → server
+export type CollabClientMsg =
+  | { type: "join";             user: CollabUser }
+  | { type: "query_broadcast";  user: CollabUser; question: string; sql?: string; rowCount: number }
+  | { type: "typing";           userId: string; isTyping: boolean };
+
+// Messages sent server → client
+export type CollabServerMsg =
+  | { type: "welcome";          users: CollabUser[]; roomId: string }
+  | { type: "user_joined";      user: CollabUser }
+  | { type: "user_left";        userId: string }
+  | { type: "query_broadcast";  fromUser: CollabUser; question: string; sql?: string; rowCount: number }
+  | { type: "typing";           userId: string; isTyping: boolean };
 
 export interface DashboardChart {
   id: string;

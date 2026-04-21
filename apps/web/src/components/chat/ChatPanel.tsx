@@ -4,11 +4,15 @@ import { Send, Loader2, Sparkles } from "lucide-react";
 import { useStore } from "@/store/useStore.js";
 import { api } from "@/lib/api.js";
 import { generateId } from "@/lib/utils.js";
+import { collabSocket } from "@/lib/ws.js";
 import { MessageBubble } from "./MessageBubble.js";
 import type { ChatMessage } from "@datachat/shared";
 
+const TYPING_DEBOUNCE = 1_500;
+
 export function ChatPanel() {
-  const { messages, addMessage, updateMessage, isQuerying, setIsQuerying, activeConnection } = useStore();
+  const { messages, addMessage, updateMessage, isQuerying, setIsQuerying, activeConnection, localUser } = useStore();
+  const typingTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const [input, setInput] = useState("");
   const bottomRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLTextAreaElement>(null);
@@ -37,6 +41,15 @@ export function ChatPanel() {
 
       const result = await api.query.run({ connectionId: activeConnection.id, question: q, history });
       updateMessage(assistantId, { content: result.reasoning, sql: result.sql, rows: result.rows });
+
+      // Broadcast to room peers (fire-and-forget)
+      collabSocket.send({
+        type: "query_broadcast",
+        user: localUser,
+        question: q,
+        sql: result.sql,
+        rowCount: result.rows.length,
+      });
     } catch (e) {
       updateMessage(assistantId, { role: "error", error: String(e) });
     } finally {
@@ -44,6 +57,16 @@ export function ChatPanel() {
       setTimeout(() => inputRef.current?.focus(), 50);
     }
   }, [isQuerying, activeConnection, messages, addMessage, updateMessage, setIsQuerying]);
+
+  const onInputChange = (val: string) => {
+    setInput(val);
+    // Typing indicator
+    collabSocket.send({ type: "typing", userId: localUser.id, isTyping: true });
+    if (typingTimer.current) clearTimeout(typingTimer.current);
+    typingTimer.current = setTimeout(() => {
+      collabSocket.send({ type: "typing", userId: localUser.id, isTyping: false });
+    }, TYPING_DEBOUNCE);
+  };
 
   const onKeyDown = (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
     if (e.key === "Enter" && (e.metaKey || e.ctrlKey)) { e.preventDefault(); submit(input); }
@@ -107,7 +130,7 @@ export function ChatPanel() {
           <textarea
             ref={inputRef}
             value={input}
-            onChange={(e) => setInput(e.target.value)}
+            onChange={(e) => onInputChange(e.target.value)}
             onKeyDown={onKeyDown}
             disabled={isQuerying}
             placeholder="Ask a question about your data…  Ctrl+Enter to send"
