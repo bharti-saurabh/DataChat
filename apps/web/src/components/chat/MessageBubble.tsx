@@ -3,8 +3,8 @@ import { motion } from "framer-motion";
 import { Bot, User, AlertCircle, ChevronDown, ChevronUp, TableIcon } from "lucide-react";
 import { cn } from "@/lib/utils.js";
 import { ChartPanel } from "@/components/visualizations/ChartPanel.js";
-import type { ChatMessage } from "@datachat/shared";
 import { InsightsPanel } from "./InsightsPanel.js";
+import type { ChatMessage } from "@datachat/shared";
 
 interface MessageBubbleProps {
   message: ChatMessage;
@@ -15,6 +15,7 @@ const bubbleVariants = {
   initial: { opacity: 0, y: 10 },
   animate: { opacity: 1, y: 0, transition: { duration: 0.2, ease: "easeOut" } },
 };
+
 export function MessageBubble({ message, onFollowUp }: MessageBubbleProps) {
   const [sqlOpen, setSqlOpen] = useState(false);
 
@@ -23,7 +24,6 @@ export function MessageBubble({ message, onFollowUp }: MessageBubbleProps) {
     const color = message.authorColor ?? "var(--color-accent)";
     return (
       <motion.div className="flex gap-3" {...bubbleVariants}>
-        {/* Peer avatar */}
         <div title={message.authorName} style={{
           width: 28, height: 28, borderRadius: "50%", flexShrink: 0, marginTop: 4,
           background: color + "22", border: `2px solid ${color}99`,
@@ -118,7 +118,6 @@ export function MessageBubble({ message, onFollowUp }: MessageBubbleProps) {
       <Avatar role="assistant" />
       <div style={{ flex: 1, minWidth: 0, display: "flex", flexDirection: "column", gap: "0.625rem" }}>
 
-        {/* Reasoning text */}
         {message.content && (
           <div style={{
             padding: "0.75rem 1rem",
@@ -133,21 +132,17 @@ export function MessageBubble({ message, onFollowUp }: MessageBubbleProps) {
           </div>
         )}
 
-        {/* SQL pill */}
         {message.sql && (
           <div>
             <button
               onClick={() => setSqlOpen((v) => !v)}
               style={{
                 display: "inline-flex", alignItems: "center", gap: "0.5rem",
-                padding: "0.3rem 0.75rem",
-                borderRadius: 9999,
+                padding: "0.3rem 0.75rem", borderRadius: 9999,
                 background: "var(--color-surface-3)",
                 border: "1px solid var(--color-border)",
-                cursor: "pointer",
-                fontSize: "0.75rem",
-                fontFamily: "var(--font-mono)",
-                color: "var(--color-cyan)",
+                cursor: "pointer", fontSize: "0.75rem",
+                fontFamily: "var(--font-mono)", color: "var(--color-cyan)",
                 transition: "border-color var(--duration-normal)",
               }}
               onMouseEnter={(e) => (e.currentTarget.style.borderColor = "var(--color-cyan)")}
@@ -158,23 +153,18 @@ export function MessageBubble({ message, onFollowUp }: MessageBubbleProps) {
               </code>
               {sqlOpen ? <ChevronUp size={11} /> : <ChevronDown size={11} />}
             </button>
-
             {sqlOpen && (
               <motion.pre
                 initial={{ opacity: 0, height: 0 }}
                 animate={{ opacity: 1, height: "auto" }}
                 exit={{ opacity: 0, height: 0 }}
                 style={{
-                  marginTop: "0.375rem",
-                  padding: "0.75rem 1rem",
+                  marginTop: "0.375rem", padding: "0.75rem 1rem",
                   borderRadius: "0.625rem",
                   background: "var(--color-surface-3)",
                   border: "1px solid var(--color-border)",
-                  fontSize: "0.75rem",
-                  fontFamily: "var(--font-mono)",
-                  color: "var(--color-cyan)",
-                  overflowX: "auto",
-                  lineHeight: 1.7,
+                  fontSize: "0.75rem", fontFamily: "var(--font-mono)",
+                  color: "var(--color-cyan)", overflowX: "auto", lineHeight: 1.7,
                 }}
               >
                 {message.sql}
@@ -183,12 +173,10 @@ export function MessageBubble({ message, onFollowUp }: MessageBubbleProps) {
           </div>
         )}
 
-        {/* Chart */}
         {message.rows && message.rows.length > 0 && (
           <ChartPanel rows={message.rows} question={message.question} />
         )}
 
-        {/* Row count badge */}
         {message.rows && message.rows.length > 0 && (
           <div style={{ display: "flex", alignItems: "center", gap: "0.375rem" }}>
             <TableIcon size={12} style={{ color: "var(--color-text-muted)" }} />
@@ -196,6 +184,10 @@ export function MessageBubble({ message, onFollowUp }: MessageBubbleProps) {
               {message.rows.length.toLocaleString()} row{message.rows.length !== 1 ? "s" : ""}
             </span>
           </div>
+        )}
+
+        {message.insights && (
+          <InsightsPanel insights={message.insights} onFollowUp={onFollowUp} />
         )}
       </div>
     </motion.div>
@@ -220,8 +212,3 @@ function Avatar({ role }: { role: "user" | "assistant" }) {
     </div>
   );
 }
-
-{/* AI Insights */}
-{message.insights && (
-  <InsightsPanel insights={message.insights} onFollowUp={onFollowUp} />
-)}
