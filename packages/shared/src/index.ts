@@ -48,6 +48,7 @@ export interface ChatMessage {
   rows?: Record<string, unknown>[];
   error?: string;
   timestamp: number;
+  insights?: InsightResult;
   // Collaboration — set when message originated from a remote peer
   authorId?: string;
   authorName?: string;
@@ -76,11 +77,21 @@ export type CollabServerMsg =
   | { type: "query_broadcast";  fromUser: CollabUser; question: string; sql?: string; rowCount: number }
   | { type: "typing";           userId: string; isTyping: boolean };
 
+export interface InsightResult {
+  summary: string;
+  anomalies: string[];
+  trends: string[];
+  suggestions: string[];
+}
+
 export interface DashboardChart {
   id: string;
   title: string;
   chartCode: string;
   data: Record<string, unknown>[];
+  question?: string;
+  chartType?: string;
+  gridPos?: { x: number; y: number; w: number; h: number };
 }
 
 export interface Session {
