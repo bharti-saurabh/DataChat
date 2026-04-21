@@ -3,11 +3,9 @@ import { immer } from "zustand/middleware/immer";
 import type { ChatMessage, ConnectionMeta, DashboardChart, TableSchema, CollabUser } from "@datachat/shared";
 import { PALETTE } from "@/components/visualizations/lib/colors.js";
 
-// ── Stable local user identity ─────────────────────────────────────────────
 function getOrCreateLocalUser(): CollabUser {
   const stored = localStorage.getItem("datachat_user");
   if (stored) return JSON.parse(stored) as CollabUser;
-
   const id    = crypto.randomUUID();
   const idx   = id.charCodeAt(0) % PALETTE.length;
   const color = PALETTE[idx];
@@ -24,47 +22,32 @@ function getOrCreateRoomId(): string {
   return id;
 }
 
-// ── State shape ────────────────────────────────────────────────────────────
 interface State {
-  // Connection
   activeConnection: ConnectionMeta | null;
   setActiveConnection: (c: ConnectionMeta | null) => void;
-  
-  updateDashboardChart: (id: string, patch: Partial<DashboardChart>) => void;
-  
-  // Schema
+
   schema: TableSchema[];
   setSchema: (schema: TableSchema[]) => void;
 
-  // Chat
   messages: ChatMessage[];
   addMessage: (msg: ChatMessage) => void;
   updateMessage: (id: string, patch: Partial<ChatMessage>) => void;
   clearMessages: () => void;
 
-  // Dashboard
   dashboardCharts: DashboardChart[];
   addDashboardChart: (chart: DashboardChart) => void;
   removeDashboardChart: (id: string) => void;
+  updateDashboardChart: (id: string, patch: Partial<DashboardChart>) => void;
 
-  updateDashboardChart: (id, patch) =>
-  set((s) => {
-    const idx = s.dashboardCharts.findIndex((c: DashboardChart) => c.id === id);
-    if (idx !== -1) Object.assign(s.dashboardCharts[idx], patch);
-  }),
-
-  // Querying
   isQuerying: boolean;
   setIsQuerying: (v: boolean) => void;
 
-  // Toasts
   addToast?: (t: { variant: "success" | "error" | "warning"; title: string; message?: string }) => void;
 
-  // Collaboration
   localUser: CollabUser;
   roomId: string;
-  collabUsers: CollabUser[];          // remote peers currently in the room
-  typingUsers: string[];              // userIds currently typing
+  collabUsers: CollabUser[];
+  typingUsers: string[];
   setCollabUsers: (users: CollabUser[]) => void;
   addCollabUser: (user: CollabUser) => void;
   removeCollabUser: (userId: string) => void;
@@ -75,15 +58,12 @@ interface State {
 
 export const useStore = create<State>()(
   immer((set) => ({
-    // Connection
     activeConnection: null,
     setActiveConnection: (c) => set((s) => { s.activeConnection = c; }),
 
-    // Schema
     schema: [],
     setSchema: (schema) => set((s) => { s.schema = schema; }),
 
-    // Chat
     messages: [],
     addMessage: (msg) => set((s) => { s.messages.push(msg); }),
     updateMessage: (id, patch) =>
@@ -93,20 +73,21 @@ export const useStore = create<State>()(
       }),
     clearMessages: () => set((s) => { s.messages = []; }),
 
-    // Dashboard
     dashboardCharts: [],
     addDashboardChart: (chart) => set((s) => { s.dashboardCharts.push(chart); }),
     removeDashboardChart: (id) =>
       set((s) => { s.dashboardCharts = s.dashboardCharts.filter((c: DashboardChart) => c.id !== id); }),
+    updateDashboardChart: (id, patch) =>
+      set((s) => {
+        const idx = s.dashboardCharts.findIndex((c: DashboardChart) => c.id === id);
+        if (idx !== -1) Object.assign(s.dashboardCharts[idx], patch);
+      }),
 
-    // Querying
     isQuerying: false,
     setIsQuerying: (v) => set((s) => { s.isQuerying = v; }),
 
-    // Toasts
     addToast: (t) => { console.info(`[toast] ${t.variant}: ${t.title}`, t.message ?? ""); },
 
-    // Collaboration
     localUser: getOrCreateLocalUser(),
     roomId:    getOrCreateRoomId(),
     collabUsers: [],
