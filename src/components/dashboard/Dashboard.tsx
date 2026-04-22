@@ -250,6 +250,19 @@ const TONE_OPTIONS = [
   { value: "executive", label: "Executive" },
 ] as const;
 
+type ExtraSection = "table" | "insights";
+
+function ResizeHandle({ onMouseDown }: { onMouseDown: (e: React.MouseEvent) => void }) {
+  return (
+    <div
+      onMouseDown={onMouseDown}
+      className="shrink-0 h-2 mx-8 my-0.5 cursor-row-resize flex items-center justify-center group"
+    >
+      <div className="w-16 h-1 rounded-full bg-gray-200 dark:bg-gray-700 group-hover:bg-indigo-400 transition-colors" />
+    </div>
+  );
+}
+
 function EditableSlide({
   block,
   onUpdate,
@@ -259,32 +272,36 @@ function EditableSlide({
 }) {
   const { llmSettings } = useDataStore();
 
-  // Slide heading (editable inline)
-  const heading = block.slideAnnotations?.heading ?? block.title ?? "";
+  // Auto-populate heading from question > title > empty
+  const defaultHeading = block.slideAnnotations?.heading
+    ?? block.question
+    ?? block.title
+    ?? "";
+
   const commentary = block.slideAnnotations?.commentary ?? "";
+  const shownSections: ExtraSection[] = block.slideAnnotations?.shownSections ?? [];
 
   const [editingHeading, setEditingHeading] = useState(false);
-  const [headingDraft, setHeadingDraft] = useState(heading);
+  const [headingDraft, setHeadingDraft] = useState(defaultHeading);
   const [commentaryDraft, setCommentaryDraft] = useState(commentary);
   const [aiLoading, setAiLoading] = useState(false);
   const [showTones, setShowTones] = useState(false);
 
-  // Chart area resize: chartPct = % of slide card height for the chart
-  const [chartPct, setChartPct] = useState(55);
+  // Per-section heights as percentage of the content zone
+  const [chartPct, setChartPct] = useState(50);
   const slideRef = useRef<HTMLDivElement>(null);
-  const dragging = useRef(false);
 
-  const onResizeStart = useCallback((e: React.MouseEvent) => {
-    dragging.current = true;
+  const makeResizeHandler = useCallback((setPct: (v: number) => void) => (e: React.MouseEvent) => {
     e.preventDefault();
+    const dragging = { active: true };
     const onMove = (ev: MouseEvent) => {
-      if (!dragging.current || !slideRef.current) return;
+      if (!dragging.active || !slideRef.current) return;
       const rect = slideRef.current.getBoundingClientRect();
       const pct = ((ev.clientY - rect.top) / rect.height) * 100;
-      setChartPct(Math.min(Math.max(pct, 20), 78));
+      setPct(Math.min(Math.max(pct, 15), 75));
     };
     const onUp = () => {
-      dragging.current = false;
+      dragging.active = false;
       window.removeEventListener("mousemove", onMove);
       window.removeEventListener("mouseup", onUp);
     };
@@ -302,11 +319,18 @@ function EditableSlide({
     onUpdate({ slideAnnotations: { ...block.slideAnnotations, commentary: val } });
   };
 
+  const toggleSection = (sec: ExtraSection) => {
+    const next = shownSections.includes(sec)
+      ? shownSections.filter((s) => s !== sec)
+      : [...shownSections, sec];
+    onUpdate({ slideAnnotations: { ...block.slideAnnotations, shownSections: next } });
+  };
+
   const handleAISuggest = async () => {
     if (!block.data?.length) return;
     setAiLoading(true);
     try {
-      const text = await suggestSlideCommentary(heading, block.data, block.insights, llmSettings);
+      const text = await suggestSlideCommentary(defaultHeading, block.data, block.insights, llmSettings);
       setCommentaryDraft(text);
       onUpdate({ slideAnnotations: { ...block.slideAnnotations, commentary: text } });
     } catch { /* ignore */ }
@@ -325,16 +349,25 @@ function EditableSlide({
     finally { setAiLoading(false); }
   };
 
-  const hasVisual = block.type === "chart" || block.type === "table" || block.type === "insights";
+  const isChart    = block.type === "chart" && Boolean(block.chartConfig) && Boolean(block.data?.length);
+  const isTable    = block.type === "table" && Boolean(block.data?.length);
+  const isInsights = block.type === "insights" && Boolean(block.insights ?? block.content);
+
+  // Can add extra sections for chart blocks that have accompanying data / insights
+  const canAddTable    = isChart && Boolean(block.data?.length);
+  const canAddInsights = (isChart || isTable) && Boolean(block.insights);
+
+  const showExtraTable    = shownSections.includes("table")    && canAddTable;
+  const showExtraInsights = shownSections.includes("insights") && canAddInsights;
 
   return (
     <div
       ref={slideRef}
       className="w-full max-w-5xl bg-white dark:bg-gray-900 rounded-3xl shadow-2xl flex flex-col overflow-hidden"
-      style={{ height: "76vh" }}
+      style={{ height: "80vh" }}
     >
       {/* ── Slide heading ── */}
-      <div className="shrink-0 px-10 pt-8 pb-3">
+      <div className="shrink-0 px-10 pt-7 pb-2">
         {editingHeading ? (
           <div className="flex items-center gap-2">
             <input
@@ -349,50 +382,101 @@ function EditableSlide({
             </button>
           </div>
         ) : (
-          <div className="flex items-center gap-2 group cursor-text" onClick={() => { setHeadingDraft(heading); setEditingHeading(true); }}>
+          <div className="flex items-center gap-2 group cursor-text" onClick={() => { setHeadingDraft(defaultHeading); setEditingHeading(true); }}>
             <h2 className="text-2xl font-bold text-gray-900 dark:text-gray-100 flex-1">
-              {heading || <span className="text-gray-400 font-normal italic">Click to add slide title…</span>}
+              {defaultHeading || <span className="text-gray-400 font-normal italic">Click to add slide title…</span>}
             </h2>
             <Edit3 size={14} className="opacity-0 group-hover:opacity-40 text-gray-400 shrink-0" />
           </div>
         )}
       </div>
 
-      {/* ── Main content (chart/table/insights) with drag-resize ── */}
-      {hasVisual && (
-        <>
-          <div className="px-10 overflow-hidden shrink-0" style={{ height: `${chartPct}%` }}>
-            <div style={{ width: "100%", height: "100%" }}>
-              {block.type === "chart" && block.chartConfig && block.data && (
-                <RechartsDisplay config={block.chartConfig} data={block.data} />
+      {/* ── Section toggle pills (for chart blocks) ── */}
+      {(canAddTable || canAddInsights) && (
+        <div className="shrink-0 px-10 pb-2 flex items-center gap-2">
+          <span className="text-[10px] text-gray-400 uppercase tracking-wider font-medium">Add to slide:</span>
+          {canAddTable && (
+            <button
+              onClick={() => toggleSection("table")}
+              className={cn(
+                "flex items-center gap-1 px-2.5 py-1 rounded-full text-[11px] font-medium border transition-colors",
+                showExtraTable
+                  ? "bg-indigo-600 text-white border-indigo-600"
+                  : "border-gray-300 dark:border-gray-600 text-gray-500 dark:text-gray-400 hover:border-indigo-400 hover:text-indigo-600",
               )}
-              {block.type === "table" && block.data?.length && (
+            >
+              <Table2 size={11} /> Data Table
+            </button>
+          )}
+          {canAddInsights && (
+            <button
+              onClick={() => toggleSection("insights")}
+              className={cn(
+                "flex items-center gap-1 px-2.5 py-1 rounded-full text-[11px] font-medium border transition-colors",
+                showExtraInsights
+                  ? "bg-indigo-600 text-white border-indigo-600"
+                  : "border-gray-300 dark:border-gray-600 text-gray-500 dark:text-gray-400 hover:border-indigo-400 hover:text-indigo-600",
+              )}
+            >
+              <Lightbulb size={11} /> Insights
+            </button>
+          )}
+        </div>
+      )}
+
+      {/* ── Main content area ── */}
+      <div className="flex-1 min-h-0 flex flex-col overflow-hidden px-10">
+
+        {/* Primary block content */}
+        {(isChart || isTable || isInsights) && (
+          <>
+            <div className="overflow-hidden" style={{ height: showExtraTable || showExtraInsights ? `${chartPct}%` : "100%" }}>
+              {isChart && (
+                <RechartsDisplay config={block.chartConfig!} data={block.data!} />
+              )}
+              {isTable && (
                 <div className="h-full overflow-auto">
-                  <ResultsTable data={block.data} />
+                  <ResultsTable data={block.data!} />
                 </div>
               )}
-              {block.type === "insights" && (
+              {isInsights && (
                 <div className="h-full overflow-auto">
                   <InsightsCard insights={block.insights ?? block.content} />
                 </div>
               )}
             </div>
-          </div>
 
-          {/* Resize handle */}
-          <div
-            onMouseDown={onResizeStart}
-            className="shrink-0 h-2 mx-10 my-1 cursor-row-resize flex items-center justify-center group"
-          >
-            <div className="w-16 h-1 rounded-full bg-gray-200 dark:bg-gray-700 group-hover:bg-indigo-400 transition-colors" />
-          </div>
-        </>
-      )}
+            {/* Resize handle between primary and extra sections */}
+            {(showExtraTable || showExtraInsights) && (
+              <ResizeHandle onMouseDown={makeResizeHandler(setChartPct)} />
+            )}
+          </>
+        )}
 
-      {/* ── Commentary area (fills remaining space) ── */}
-      <div className="flex-1 min-h-0 flex flex-col px-10 pb-8 gap-2" style={{ minHeight: hasVisual ? undefined : "60%" }}>
+        {/* Extra sections */}
+        {showExtraTable && (
+          <div className="flex flex-col min-h-0 pb-1" style={{ flex: 1 }}>
+            <p className="text-[10px] text-gray-400 font-semibold uppercase tracking-wider mb-1 shrink-0">Data Table</p>
+            <div className="flex-1 min-h-0 overflow-auto rounded-xl border border-gray-200 dark:border-gray-700">
+              <ResultsTable data={block.data!} />
+            </div>
+          </div>
+        )}
+
+        {showExtraInsights && (
+          <div className="flex flex-col min-h-0 pb-1" style={{ flex: showExtraTable ? undefined : 1 }}>
+            <p className="text-[10px] text-gray-400 font-semibold uppercase tracking-wider mb-1 shrink-0">Key Insights</p>
+            <div className="flex-1 min-h-0 overflow-auto">
+              <InsightsCard insights={block.insights ?? block.content} />
+            </div>
+          </div>
+        )}
+      </div>
+
+      {/* ── Commentary area ── */}
+      <div className="shrink-0 flex flex-col px-10 pb-7 pt-2 gap-1.5" style={{ maxHeight: "30%" }}>
         {/* Toolbar */}
-        <div className="shrink-0 flex items-center gap-2">
+        <div className="flex items-center gap-2">
           <span className="text-[10px] font-semibold uppercase tracking-wider text-gray-400">Commentary</span>
           <div className="flex-1" />
           {aiLoading ? (
@@ -432,14 +516,86 @@ function EditableSlide({
           )}
         </div>
 
-        {/* Full-height textarea */}
         <textarea
           value={commentaryDraft}
           onChange={(e) => saveCommentary(e.target.value)}
-          placeholder="Add commentary, key takeaways, or context for this slide… (or click AI Suggest)"
+          placeholder="Add commentary, key takeaways, or context… (or click AI Suggest)"
           className="flex-1 w-full resize-none rounded-2xl border border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-800/50 px-4 py-3 text-sm text-gray-700 dark:text-gray-300 placeholder:text-gray-400 focus:outline-none focus:ring-2 focus:ring-indigo-300 dark:focus:ring-indigo-700 leading-relaxed"
+          rows={3}
         />
       </div>
+    </div>
+  );
+}
+
+// ── Hidden export container for presentation PDF ──────────────────────────────
+
+function PresentationExportContainer({
+  blocks,
+  containerRef,
+}: {
+  blocks: DashboardBlock[];
+  containerRef: React.RefObject<HTMLDivElement | null>;
+}) {
+  return (
+    <div
+      ref={containerRef as React.RefObject<HTMLDivElement>}
+      style={{
+        position: "fixed",
+        top: 0,
+        left: "-9999px",
+        width: "1280px",
+        background: "#0f172a",
+        zIndex: -1,
+        pointerEvents: "none",
+      }}
+    >
+      {blocks.map((block) => (
+        <div
+          key={block.id}
+          style={{
+            width: "100%",
+            height: "720px",
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "center",
+            padding: "32px",
+            boxSizing: "border-box",
+            pageBreakAfter: "always",
+          }}
+        >
+          <div style={{
+            width: "100%",
+            height: "100%",
+            background: "#fff",
+            borderRadius: "24px",
+            padding: "40px",
+            display: "flex",
+            flexDirection: "column",
+            gap: "16px",
+            overflow: "hidden",
+          }}>
+            <h2 style={{ fontSize: 24, fontWeight: 700, color: "#111827", margin: 0, flexShrink: 0 }}>
+              {block.slideAnnotations?.heading ?? block.question ?? block.title ?? ""}
+            </h2>
+            {block.type === "chart" && block.chartConfig && block.data && (
+              <div style={{ flex: 1, minHeight: 0 }}>
+                <RechartsDisplay config={block.chartConfig} data={block.data} />
+              </div>
+            )}
+            {block.type === "table" && block.data?.length && (
+              <div style={{ flex: 1, minHeight: 0, overflow: "auto" }}>
+                <ResultsTable data={block.data} />
+              </div>
+            )}
+            {block.slideAnnotations?.commentary && (
+              <p style={{ fontSize: 13, color: "#374151", lineHeight: 1.6, flexShrink: 0 }}>
+                {block.slideAnnotations.commentary}
+              </p>
+            )}
+          </div>
+        </div>
+      ))}
     </div>
   );
 }
@@ -449,9 +605,11 @@ function EditableSlide({
 function PresentationView({
   blocks,
   onUpdate,
+  onExportPDF,
 }: {
   blocks: DashboardBlock[];
   onUpdate: (id: string, patch: Partial<DashboardBlock>) => void;
+  onExportPDF: () => void;
 }) {
   const [slide, setSlide] = useState(0);
   const displayBlocks = blocks.filter((b) => b.type !== "divider");
@@ -470,9 +628,17 @@ function PresentationView({
 
   return (
     <div className="flex-1 flex flex-col min-h-0 bg-gradient-to-br from-gray-950 to-indigo-950">
-      {/* Slide counter */}
-      <div className="shrink-0 text-center py-3 text-xs text-gray-500 font-medium tracking-widest uppercase">
-        {safeSlide + 1} / {total}
+      {/* Top bar */}
+      <div className="shrink-0 flex items-center justify-between px-8 py-3">
+        <span className="text-xs text-gray-500 font-medium tracking-widest uppercase">
+          {safeSlide + 1} / {total}
+        </span>
+        <button
+          onClick={onExportPDF}
+          className="flex items-center gap-1.5 px-3 py-1.5 text-xs rounded-lg bg-white/10 hover:bg-white/20 text-white/80 hover:text-white transition-colors"
+        >
+          <FileDown size={13} /> Export PDF
+        </button>
       </div>
 
       {/* Slide card */}
@@ -526,10 +692,14 @@ export function Dashboard() {
   } = useDataStore();
 
   const [mode, setMode] = useState<DashboardMode>("document");
-  // useContainerWidth measures the grid container and returns [ref, width]
   const { containerRef: gridContainerRef, width: gridWidth } = useContainerWidth({ initialWidth: 1200 });
 
+  // Hidden container for presentation PDF export
+  const presentationExportRef = useRef<HTMLDivElement | null>(null);
+
   if (!dashboardOpen) return null;
+
+  const displayBlocks = dashboardBlocks.filter((b) => b.type !== "divider");
 
   const handleAdd = (type: BlockType, level?: 1 | 2 | 3) => {
     addDashboardBlock({
@@ -547,7 +717,8 @@ export function Dashboard() {
     });
   };
 
-  const handleExportPDF = async () => {
+  // ── Document PDF ──────────────────────────────────────────────────────────
+  const handleDocumentPDF = async () => {
     addToast({ variant: "info", title: "Generating PDF…" });
     try {
       const { jsPDF } = await import("jspdf");
@@ -555,7 +726,6 @@ export function Dashboard() {
       const el = document.getElementById("dashboard-grid-content");
       if (!el) throw new Error("Dashboard element not found");
 
-      // foreignObjectRendering lets html2canvas rasterize SVG gradients/filters used by Recharts
       const canvas = await html2canvas(el, {
         scale: 1.5,
         useCORS: true,
@@ -570,7 +740,8 @@ export function Dashboard() {
       const imgW = pageW - 16;
       const imgH = (canvas.height * imgW) / canvas.width;
       const pageH = pdf.internal.pageSize.getHeight() - 16;
-      let y = 8; let remaining = imgH;
+      let y = 8;
+      let remaining = imgH;
       pdf.addImage(imgData, "PNG", 8, y, imgW, imgH);
       remaining -= pageH;
       while (remaining > 0) {
@@ -581,6 +752,60 @@ export function Dashboard() {
       }
       pdf.save("datachat-dashboard.pdf");
       addToast({ variant: "success", title: "PDF exported" });
+    } catch (e) {
+      addToast({ variant: "error", title: "Export failed", message: String(e) });
+    }
+  };
+
+  // ── Presentation PDF (one slide per A4 page, landscape) ───────────────────
+  const handlePresentationPDF = async () => {
+    addToast({ variant: "info", title: "Generating slides PDF…" });
+    try {
+      const { jsPDF } = await import("jspdf");
+      const { default: html2canvas } = await import("html2canvas");
+
+      const exportEl = presentationExportRef.current;
+      if (!exportEl) throw new Error("Export container not found");
+
+      // Make temporarily visible for html2canvas
+      exportEl.style.left = "0";
+      exportEl.style.top = "0";
+      exportEl.style.zIndex = "9999";
+
+      const pdf = new jsPDF({ orientation: "landscape", unit: "mm", format: "a4" });
+      const pageW = pdf.internal.pageSize.getWidth();
+      const pageH = pdf.internal.pageSize.getHeight();
+      const margin = 8;
+
+      const slideEls = exportEl.querySelectorAll<HTMLElement>("[data-slide]");
+      let first = true;
+
+      for (const slideEl of Array.from(slideEls)) {
+        const canvas = await html2canvas(slideEl, {
+          scale: 1.5,
+          useCORS: true,
+          allowTaint: true,
+          foreignObjectRendering: true,
+          backgroundColor: "#0f172a",
+          logging: false,
+        });
+        const imgData = canvas.toDataURL("image/png");
+        const imgW = pageW - margin * 2;
+        const imgH = (canvas.height * imgW) / canvas.width;
+        const clampedH = Math.min(imgH, pageH - margin * 2);
+
+        if (!first) pdf.addPage();
+        pdf.addImage(imgData, "PNG", margin, margin, imgW, clampedH);
+        first = false;
+      }
+
+      // Hide again
+      exportEl.style.left = "-9999px";
+      exportEl.style.top = "0";
+      exportEl.style.zIndex = "-1";
+
+      pdf.save("datachat-presentation.pdf");
+      addToast({ variant: "success", title: "Slides exported" });
     } catch (e) {
       addToast({ variant: "error", title: "Export failed", message: String(e) });
     }
@@ -631,9 +856,10 @@ export function Dashboard() {
 
         <span className="text-xs text-gray-400">{dashboardBlocks.length} block{dashboardBlocks.length !== 1 ? "s" : ""}</span>
 
+        {/* PDF export — document mode only (presentation has its own button in-view) */}
         {dashboardBlocks.length > 0 && mode === "document" && (
           <button
-            onClick={handleExportPDF}
+            onClick={handleDocumentPDF}
             className="flex items-center gap-1.5 px-3 py-1.5 text-xs rounded-lg border border-gray-200 dark:border-gray-700 text-gray-600 dark:text-gray-400 hover:bg-gray-50 dark:hover:bg-gray-800 transition-colors"
           >
             <FileDown size={13} /> Export PDF
@@ -707,8 +933,15 @@ export function Dashboard() {
         <PresentationView
           blocks={dashboardBlocks}
           onUpdate={(id, patch) => updateDashboardBlock(id, patch)}
+          onExportPDF={handlePresentationPDF}
         />
       )}
+
+      {/* Hidden export container for presentation PDF */}
+      <PresentationExportContainer
+        blocks={displayBlocks}
+        containerRef={presentationExportRef}
+      />
     </div>
   );
 }

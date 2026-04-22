@@ -1,5 +1,22 @@
-import type { ColumnInfo, ColumnStats } from "@/types";
+import type { ColumnInfo, ColumnStats, ForeignKeyInfo } from "@/types";
 import type { DB } from "@/lib/db";
+
+/** Load foreign key relationships for a table via SQLite PRAGMA. */
+export function loadForeignKeys(db: DB, tableName: string): ForeignKeyInfo[] {
+  try {
+    const safe = tableName.replace(/"/g, '""');
+    const rows = db.exec(`PRAGMA foreign_key_list("${safe}")`, {
+      rowMode: "object",
+    }) as Record<string, unknown>[];
+    return rows.map((r) => ({
+      column: String(r.from ?? ""),
+      refTable: String(r.table ?? ""),
+      refColumn: String(r.to ?? ""),
+    }));
+  } catch {
+    return [];
+  }
+}
 
 export async function computeColumnStats(
   db: DB,

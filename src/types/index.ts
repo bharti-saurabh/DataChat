@@ -19,6 +19,12 @@ export interface ColumnStats {
   description?: string;     // AI-generated plain-English description
 }
 
+export interface ForeignKeyInfo {
+  column: string;       // local column name
+  refTable: string;     // referenced table
+  refColumn: string;    // referenced column
+}
+
 export interface TableSchema {
   name: string;
   sql: string;
@@ -26,6 +32,7 @@ export interface TableSchema {
   rowCount?: number;
   preview?: QueryRow[];
   columnStats?: ColumnStats[];  // cached after first expand
+  foreignKeys?: ForeignKeyInfo[]; // loaded via PRAGMA on first expand
 }
 
 export type QueryRow = Record<string, unknown>;
@@ -77,8 +84,15 @@ export interface DashboardBlock {
   title?: string;
   // insights
   insights?: string;
-  // Presentation-mode per-slide annotations (editable heading + commentary)
-  slideAnnotations?: { heading?: string; commentary?: string };
+  // Source query (used for auto-populating presentation slide heading)
+  question?: string;
+  // Presentation-mode per-slide annotations
+  slideAnnotations?: {
+    heading?: string;
+    commentary?: string;
+    /** which extra sections are visible alongside the main content */
+    shownSections?: ("table" | "insights")[];
+  };
   // Grid layout (react-grid-layout)
   layout: { x: number; y: number; w: number; h: number };
 }
