@@ -1,5 +1,10 @@
 import { useState } from "react";
-import ReactGridLayout from "react-grid-layout";
+// react-grid-layout v3 dropped WidthProvider. Use GridLayout + useContainerWidth hook.
+// The @types package is for v1; bypass stale types with a cast.
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+import GridLayoutUntyped, { useContainerWidth } from "react-grid-layout";
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+const GridLayout = GridLayoutUntyped as unknown as React.ComponentClass<any>;
 import "react-grid-layout/css/styles.css";
 import "react-resizable/css/styles.css";
 import {
@@ -14,14 +19,6 @@ import { InsightsCard } from "@/components/chat/InsightsCard";
 import { generateId } from "@/lib/utils";
 import { cn } from "@/lib/utils";
 import type { DashboardBlock, BlockType } from "@/types";
-
-// react-grid-layout ships `WidthProvider` as a property on the module export.
-// With `export = X` types + esModuleInterop the default import IS that export,
-// so WidthProvider lives at `(ReactGridLayout as any).WidthProvider` at runtime.
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-const WidthProvider: <T>(c: React.ComponentType<T>) => React.ComponentClass<Omit<T, "width"> & { measureBeforeMount?: boolean }> = (ReactGridLayout as any).WidthProvider;
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-const AutoWidthGridLayout = WidthProvider(ReactGridLayout) as unknown as React.ComponentClass<any>;
 
 interface GridItemLayout {
   i: string;
@@ -330,6 +327,8 @@ export function Dashboard() {
   } = useDataStore();
 
   const [mode, setMode] = useState<DashboardMode>("document");
+  // useContainerWidth measures the grid container and returns [ref, width]
+  const { containerRef: gridContainerRef, width: gridWidth } = useContainerWidth({ initialWidth: 1200 });
 
   if (!dashboardOpen) return null;
 
@@ -464,11 +463,12 @@ export function Dashboard() {
               <AddBlockMenu onAdd={handleAdd} />
             </div>
           ) : (
-            <div id="dashboard-grid-content" className="px-4 py-4">
-              <AutoWidthGridLayout
+            <div id="dashboard-grid-content" className="px-4 py-4" ref={gridContainerRef as React.RefObject<HTMLDivElement>}>
+              <GridLayout
                 layout={gridLayout}
                 cols={12}
                 rowHeight={50}
+                width={gridWidth}
                 isDraggable
                 isResizable
                 draggableHandle=".drag-handle"
@@ -485,7 +485,7 @@ export function Dashboard() {
                     />
                   </div>
                 ))}
-              </AutoWidthGridLayout>
+              </GridLayout>
 
               <div className="mt-4 px-1">
                 <AddBlockMenu onAdd={handleAdd} />
