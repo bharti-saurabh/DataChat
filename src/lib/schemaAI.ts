@@ -1,6 +1,28 @@
 import { callLLM } from "@/lib/llm";
 import type { ColumnInfo, ColumnStats, LLMSettings, QueryRow } from "@/types";
 
+/** Generate a concise, punchy slide heading (5–10 words) for a data result. */
+export async function suggestSlideHeading(
+  data: QueryRow[],
+  chartTitle: string | undefined,
+  insights: string | undefined,
+  settings: LLMSettings,
+): Promise<string> {
+  const cols = data.length ? Object.keys(data[0]) : [];
+  const sample = JSON.stringify(data.slice(0, 5), null, 0);
+
+  const system = `You are a data presentation expert. Write a short, punchy slide title (5–10 words) that captures the main finding of the data. Use title case. No periods. No preamble.`;
+  const user = `Columns: ${cols.join(", ")}
+Sample data: ${sample}
+${chartTitle ? `Chart title: ${chartTitle}` : ""}
+${insights ? `Key insight: ${insights.split("\n")[0]}` : ""}
+
+Write the slide title:`;
+
+  const raw = await callLLM({ system, user, settings });
+  return raw.trim().replace(/^["']|["']$/g, "").replace(/\.$/, "");
+}
+
 /** Generate a concise plain-English description of a column. */
 export async function generateColumnDescription(
   tableName: string,

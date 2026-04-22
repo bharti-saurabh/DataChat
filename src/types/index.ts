@@ -37,7 +37,7 @@ export interface TableSchema {
 
 export type QueryRow = Record<string, unknown>;
 
-// ── Chart config (replaces raw chartCode eval approach) ──────────────────────
+// ── Chart config ─────────────────────────────────────────────────────────────
 export type ChartType = "bar" | "line" | "area" | "pie" | "donut" | "scatter";
 
 export interface ChartConfig {
@@ -45,6 +45,18 @@ export interface ChartConfig {
   xKey: string;
   yKey: string | string[];
   title?: string;
+  // Advanced
+  colors?: string[];                         // per-series color overrides
+  dualAxis?: boolean;                        // enable right Y-axis
+  rightAxisKeys?: string[];                  // series rendered on right axis
+  seriesTypes?: Record<string, ChartType>;   // per-series type (mixed charts)
+}
+
+// ── Slide text block ──────────────────────────────────────────────────────────
+export interface SlideTextBlock {
+  id: string;
+  content: string;
+  format: "heading" | "body" | "caption" | "key";
 }
 
 // ── Chat ─────────────────────────────────────────────────────────────────────
@@ -89,9 +101,8 @@ export interface DashboardBlock {
   // Presentation-mode per-slide annotations
   slideAnnotations?: {
     heading?: string;
-    commentary?: string;
-    /** which extra sections are visible alongside the main content */
-    shownSections?: ("table" | "insights")[];
+    textBlocks?: SlideTextBlock[];           // rich text blocks (replaces commentary)
+    shownSections?: ("table" | "insights")[]; // extra content panels
   };
   // Grid layout (react-grid-layout)
   layout: { x: number; y: number; w: number; h: number };

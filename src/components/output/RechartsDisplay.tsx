@@ -1,21 +1,24 @@
 import {
-  ResponsiveContainer, BarChart, Bar, LineChart, Line, AreaChart, Area,
-  PieChart, Pie, Cell, ScatterChart, Scatter,
+  ResponsiveContainer,
+  ComposedChart, BarChart, LineChart, AreaChart,
+  PieChart, ScatterChart,
+  Bar, Line, Area, Scatter, Pie, Cell,
   XAxis, YAxis, CartesianGrid, Tooltip, Legend,
 } from "recharts";
 import type { TooltipProps } from "recharts";
 import type { ChartConfig, QueryRow } from "@/types";
 
-const HOLO = ["#6366f1", "#8b5cf6", "#ec4899", "#06b6d4", "#10b981", "#f59e0b", "#ef4444", "#3b82f6"];
+export const DEFAULT_PALETTE = [
+  "#6366f1", "#8b5cf6", "#ec4899", "#06b6d4",
+  "#10b981", "#f59e0b", "#ef4444", "#3b82f6",
+];
 
 const axisProps = {
   tick: { fill: "#9ca3af", fontSize: 10 },
   axisLine: { stroke: "rgba(156,163,175,0.2)" },
   tickLine: false as const,
 };
-
 const gridProps = { strokeDasharray: "3 3", stroke: "rgba(156,163,175,0.12)", vertical: false };
-
 const TOOLTIP_STYLE: React.CSSProperties = {
   background: "rgba(255,255,255,0.97)",
   border: "1px solid rgba(99,102,241,0.15)",
@@ -62,18 +65,20 @@ export function RechartsDisplay({ config, data, compact }: RechartsDisplayProps)
     return <div className="flex items-center justify-center h-full text-sm text-gray-400">No data</div>;
   }
 
-  const { chartType, xKey, yKey } = config;
+  const { chartType, xKey, yKey, colors, dualAxis, rightAxisKeys = [], seriesTypes = {} } = config;
   const yKeys: string[] = Array.isArray(yKey) ? yKey : [yKey];
-  const margin = { top: 8, right: 16, left: -8, bottom: compact ? 0 : 4 };
+  const palette = colors?.length ? colors : DEFAULT_PALETTE;
+  const margin = { top: 8, right: dualAxis ? 40 : 16, left: -8, bottom: compact ? 0 : 4 };
   const legendStyle: React.CSSProperties = { fontSize: 10, color: "#9ca3af", paddingTop: 4 };
 
+  // ── Pie / Donut ────────────────────────────────────────────────────────────
   if (chartType === "pie" || chartType === "donut") {
     const valueKey = yKeys[0];
     return (
       <ResponsiveContainer width="100%" height="100%">
         <PieChart>
           <defs>
-            {HOLO.map((c, i) => (
+            {palette.map((c, i) => (
               <radialGradient key={i} id={`pg${i}`} cx="30%" cy="30%" r="70%">
                 <stop offset="0%" stopColor={c} stopOpacity={0.95} />
                 <stop offset="100%" stopColor={c} stopOpacity={0.6} />
@@ -85,8 +90,8 @@ export function RechartsDisplay({ config, data, compact }: RechartsDisplayProps)
             innerRadius={chartType === "donut" ? "50%" : 0}
             outerRadius="70%" paddingAngle={3} stroke="none">
             {data.map((_, i) => (
-              <Cell key={i} fill={`url(#pg${i % HOLO.length})`}
-                style={{ filter: `drop-shadow(0 2px 6px ${HOLO[i % HOLO.length]}66)` }} />
+              <Cell key={i} fill={`url(#pg${i % palette.length})`}
+                style={{ filter: `drop-shadow(0 2px 6px ${palette[i % palette.length]}66)` }} />
             ))}
           </Pie>
           <Tooltip content={<HoloTooltip />} />
@@ -96,16 +101,18 @@ export function RechartsDisplay({ config, data, compact }: RechartsDisplayProps)
     );
   }
 
+  // ── Scatter ───────────────────────────────────────────────────────────────
   if (chartType === "scatter") {
     const xNum = yKeys[0] ?? xKey;
     const yNum = yKeys[1] ?? yKeys[0];
+    const c = palette[0];
     return (
       <ResponsiveContainer width="100%" height="100%">
         <ScatterChart margin={margin}>
           <defs>
             <radialGradient id="sg" cx="50%" cy="50%" r="50%">
-              <stop offset="0%" stopColor="#6366f1" stopOpacity={0.9} />
-              <stop offset="100%" stopColor="#8b5cf6" stopOpacity={0.4} />
+              <stop offset="0%" stopColor={c} stopOpacity={0.9} />
+              <stop offset="100%" stopColor={c} stopOpacity={0.4} />
             </radialGradient>
           </defs>
           <CartesianGrid {...gridProps} />
@@ -119,14 +126,26 @@ export function RechartsDisplay({ config, data, compact }: RechartsDisplayProps)
     );
   }
 
-  const ChartComp = chartType === "line" ? LineChart : chartType === "area" ? AreaChart : BarChart;
+  // ── Bar / Line / Area / Mixed (ComposedChart) ─────────────────────────────
+  // Determine if we need ComposedChart (dual axis or mixed series types)
+  const uniqueSeriesTypes = new Set([chartType, ...Object.values(seriesTypes)]);
+  const needsComposed = dualAxis || uniqueSeriesTypes.size > 1;
+
+  // Resolved type for each key
+  const resolveType = (key: string) => seriesTypes[key] ?? chartType;
+
+  const ChartComp = needsComposed
+    ? ComposedChart
+    : chartType === "line" ? LineChart
+    : chartType === "area" ? AreaChart
+    : BarChart;
 
   return (
     <ResponsiveContainer width="100%" height="100%">
       <ChartComp data={data} margin={margin}>
         <defs>
           {yKeys.map((_, i) => {
-            const c = HOLO[i % HOLO.length];
+            const c = palette[i % palette.length];
             return (
               <linearGradient key={i} id={`g${i}`} x1="0" y1="0" x2="0" y2="1">
                 <stop offset="0%" stopColor={c} stopOpacity={0.88} />
@@ -135,37 +154,63 @@ export function RechartsDisplay({ config, data, compact }: RechartsDisplayProps)
             );
           })}
         </defs>
+
         <CartesianGrid {...gridProps} />
+
         <XAxis dataKey={xKey} {...axisProps}
-          tickFormatter={(v) => String(v).slice(0, compact ? 6 : 12)}
+          tickFormatter={(v) => String(v).slice(0, compact ? 6 : 14)}
           interval="preserveStartEnd" />
-        <YAxis {...axisProps}
+
+        {/* Left Y-axis */}
+        <YAxis
+          {...axisProps}
+          yAxisId={dualAxis ? "left" : undefined}
           tickFormatter={(v) => typeof v === "number" && v >= 1000
             ? `${(v / 1000).toFixed(0)}k` : String(v)} />
+
+        {/* Right Y-axis (dual axis only) */}
+        {dualAxis && (
+          <YAxis
+            {...axisProps}
+            yAxisId="right"
+            orientation="right"
+            tickFormatter={(v) => typeof v === "number" && v >= 1000
+              ? `${(v / 1000).toFixed(0)}k` : String(v)} />
+        )}
+
         <Tooltip content={<HoloTooltip />} cursor={{ fill: "rgba(99,102,241,0.04)" }} />
         {yKeys.length > 1 && <Legend iconType="circle" iconSize={7} wrapperStyle={legendStyle} />}
+
         {yKeys.map((key, i) => {
-          const color = HOLO[i % HOLO.length];
-          if (chartType === "line") {
+          const color = palette[i % palette.length];
+          const seriesType = resolveType(key);
+          const yAxisId = dualAxis
+            ? (rightAxisKeys.includes(key) ? "right" : "left")
+            : undefined;
+
+          if (seriesType === "line") {
             return (
               <Line key={key} type="monotone" dataKey={key}
                 stroke={color} strokeWidth={2.5} dot={false}
                 activeDot={{ r: 5, fill: color, stroke: "white", strokeWidth: 2 }}
-                style={{ filter: `drop-shadow(0 0 3px ${color}88)` }} />
+                style={{ filter: `drop-shadow(0 0 3px ${color}88)` }}
+                yAxisId={yAxisId} />
             );
           }
-          if (chartType === "area") {
+          if (seriesType === "area") {
             return (
               <Area key={key} type="monotone" dataKey={key}
                 stroke={color} strokeWidth={2.5} fill={`url(#g${i})`}
-                activeDot={{ r: 5, fill: color, stroke: "white", strokeWidth: 2 }} />
+                activeDot={{ r: 5, fill: color, stroke: "white", strokeWidth: 2 }}
+                yAxisId={yAxisId} />
             );
           }
           return (
             <Bar key={key} dataKey={key}
               fill={`url(#g${i})`} stroke={color} strokeWidth={0}
               radius={[4, 4, 0, 0]} maxBarSize={60}
-              style={{ filter: `drop-shadow(0 2px 6px ${color}44)` }} />
+              style={{ filter: `drop-shadow(0 2px 6px ${color}44)` }}
+              yAxisId={yAxisId} />
           );
         })}
       </ChartComp>
