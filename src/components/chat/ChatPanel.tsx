@@ -23,10 +23,40 @@ export function ChatPanel() {
   const bottomRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLTextAreaElement>(null);
 
+  // ── Resizable split ─────────────────────────────────────────────────────────
+  // chatPct = percentage of available width given to the chat column (left)
+  const [chatPct, setChatPct] = useState(38); // default: chat 38%, output 62%
+  const containerRef = useRef<HTMLDivElement>(null);
+  const dragging = useRef(false);
+
+  const onDragStart = (e: React.MouseEvent) => {
+    dragging.current = true;
+    e.preventDefault();
+
+    const container = containerRef.current;
+    if (!container) return;
+
+    const onMove = (e: MouseEvent) => {
+      if (!dragging.current) return;
+      const rect = container.getBoundingClientRect();
+      const pct = ((e.clientX - rect.left) / rect.width) * 100;
+      setChatPct(Math.min(Math.max(pct, 25), 65)); // clamp 25%–65%
+    };
+    const onUp = () => {
+      dragging.current = false;
+      window.removeEventListener("mousemove", onMove);
+      window.removeEventListener("mouseup", onUp);
+    };
+    window.addEventListener("mousemove", onMove);
+    window.addEventListener("mouseup", onUp);
+  };
+
+  // ── Auto-scroll ─────────────────────────────────────────────────────────────
   useEffect(() => {
     bottomRef.current?.scrollIntoView({ behavior: "smooth" });
   }, [messages.length]);
 
+  // ── Session auto-save ───────────────────────────────────────────────────────
   useEffect(() => {
     if (!messages.length) return;
     const firstQuestion = messages.find((m) => m.role === "user")?.question ?? "Untitled";
@@ -34,6 +64,7 @@ export function ChatPanel() {
     upsertSession({ id: sessionId, name, context, messages, updatedAt: Date.now(), createdAt: Date.now() }).catch(() => {});
   }, [messages, sessionId, context, sessionName]);
 
+  // ── Core query execution ────────────────────────────────────────────────────
   const executeQuery = useCallback(async (question: string) => {
     const db = await getDB();
     const schemaSQL = schemas.map((s) => s.sql).join("\n\n");
@@ -85,19 +116,16 @@ Always use [Table].[Column] notation.`;
       if (error) addToast({ variant: "warning", title: "SQL Error", message: error });
 
       if (result && result.length > 0 && !error) {
-        // Auto-chart (JSON config)
         updateMessage(assistantMsgId, { autoChartLoading: true });
         generateChartConfig(result, question, llmSettings)
           .then((cfg) => updateMessage(assistantMsgId, { autoChartConfig: cfg, autoChartLoading: false }))
           .catch(() => updateMessage(assistantMsgId, { autoChartLoading: false }));
 
-        // Insights
         updateMessage(assistantMsgId, { insightsLoading: true });
         generateInsights(question, result, llmSettings)
           .then((insights) => updateMessage(assistantMsgId, { insights, insightsLoading: false }))
           .catch(() => updateMessage(assistantMsgId, { insightsLoading: false }));
 
-        // Follow-up suggestions
         generateFollowUps(question, result, llmSettings)
           .then((suggestions) => updateMessage(assistantMsgId, { suggestions }))
           .catch(() => {});
@@ -112,6 +140,7 @@ Always use [Table].[Column] notation.`;
     }
   }, [schemas, context, messages, sessionId, addMessage, updateMessage, setIsQuerying, addToast, llmSettings, setSelectedMessageId]);
 
+  // ── Submit with clarification check ─────────────────────────────────────────
   const handleSubmit = useCallback(async (question: string) => {
     const q = question.trim();
     if (!q || isQuerying) return;
@@ -143,9 +172,9 @@ Always use [Table].[Column] notation.`;
   const noData = schemas.length === 0;
 
   return (
-    <div className="flex flex-1 min-h-0">
-      {/* ── Left: Conversation ── */}
-      <div className="flex flex-col flex-1 min-w-0 border-r border-gray-200 dark:border-gray-700">
+    <div ref={containerRef} className="flex flex-1 min-h-0 select-none">
+      {/* ── Chat column ── */}
+      <div className="flex flex-col min-h-0 min-w-0" style={{ width: `${chatPct}%` }}>
         {/* Messages */}
         <div className="flex-1 overflow-y-auto px-4 py-4 space-y-3">
           {messages.length === 0 && (
@@ -156,7 +185,7 @@ Always use [Table].[Column] notation.`;
               <div>
                 <h2 className="text-xl font-semibold text-gray-800 dark:text-gray-200">DataChat</h2>
                 <p className="text-sm text-gray-400 dark:text-gray-500 mt-1">
-                  {noData ? "Load a dataset to start asking questions" : "Ask a question about your data"}
+                  {noData ? "Load a dataset to start" : "Ask a question about your data"}
                 </p>
               </div>
               {!noData && suggestionsLoading && (
@@ -165,11 +194,11 @@ Always use [Table].[Column] notation.`;
                 </div>
               )}
               {!noData && !suggestionsLoading && suggestedQuestions.length > 0 && (
-                <div className="w-full max-w-sm space-y-1.5">
+                <div className="w-full max-w-xs space-y-1.5">
                   <p className="text-xs font-medium text-gray-400 mb-2">Suggested questions</p>
                   {suggestedQuestions.map((q) => (
                     <button key={q} onClick={() => handleSubmit(q)}
-                      className="w-full text-left text-sm px-3 py-2 rounded-xl border border-gray-200 dark:border-gray-700 hover:border-indigo-300 dark:hover:border-indigo-700 hover:bg-indigo-50 dark:hover:bg-indigo-950/50 text-gray-700 dark:text-gray-300 transition-all">
+                      className="w-full text-left text-sm px-3 py-2 rounded-xl border border-gray-200 dark:border-gray-700 hover:border-indigo-300 dark:hover:border-indigo-700 hover:bg-indigo-50/60 dark:hover:bg-indigo-950/40 text-gray-700 dark:text-gray-300 transition-all">
                       {q}
                     </button>
                   ))}
@@ -189,7 +218,7 @@ Always use [Table].[Column] notation.`;
           <div ref={bottomRef} />
         </div>
 
-        {/* Input */}
+        {/* Input bar */}
         <div className="border-t border-gray-200 dark:border-gray-700 p-3 bg-white dark:bg-gray-950 shrink-0">
           <div className={cn(
             "rounded-xl border bg-white dark:bg-gray-900 transition-colors",
@@ -206,7 +235,7 @@ Always use [Table].[Column] notation.`;
               className="w-full resize-none rounded-xl px-3 pt-3 pb-1 text-sm bg-transparent text-gray-800 dark:text-gray-200 placeholder:text-gray-400 focus:outline-none"
             />
             <div className="flex items-center justify-between px-3 pb-2">
-              <span className="text-xs text-gray-400">⌘+Enter to submit</span>
+              <span className="text-xs text-gray-400">⌘+Enter</span>
               <button
                 onClick={() => handleSubmit(input)}
                 disabled={!input.trim() || isQuerying || noData}
@@ -220,9 +249,17 @@ Always use [Table].[Column] notation.`;
         </div>
       </div>
 
-      {/* ── Right: Output panel ── */}
-      <div className="w-[420px] shrink-0 flex flex-col min-h-0 bg-white dark:bg-gray-950">
-        <OutputPanel onFollowUp={handleSubmit} />
+      {/* ── Drag handle ── */}
+      <div
+        onMouseDown={onDragStart}
+        className="w-1.5 shrink-0 cursor-col-resize bg-gray-200 dark:bg-gray-700 hover:bg-indigo-400 dark:hover:bg-indigo-600 transition-colors active:bg-indigo-500"
+        title="Drag to resize"
+      />
+
+      {/* ── Output panel ── */}
+      <div className="flex flex-col min-h-0 bg-white dark:bg-gray-950 border-l border-gray-200 dark:border-gray-700"
+        style={{ width: `${100 - chatPct}%` }}>
+        <OutputPanel />
       </div>
     </div>
   );

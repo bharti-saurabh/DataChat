@@ -132,7 +132,14 @@ export const useDataStore = create<DataState>()(
       s.schemas = [];
       s.selectedMessageId = undefined;
     }),
-    addDashboardBlock: (block) => set((s) => { s.dashboardBlocks.push(block); }),
+    addDashboardBlock: (block) => set((s) => {
+      // Auto-assign layout if not provided
+      const defaultW = block.type === "chart" ? 6 : block.type === "table" ? 12 : block.type === "insights" ? 6 : block.type === "divider" ? 12 : 12;
+      const defaultH = block.type === "chart" ? 8 : block.type === "table" ? 6 : block.type === "insights" ? 4 : block.type === "divider" ? 1 : block.type === "heading" ? 2 : 3;
+      const maxY = s.dashboardBlocks.reduce((m, b) => Math.max(m, b.layout.y + b.layout.h), 0);
+      if (!block.layout) block.layout = { x: 0, y: maxY, w: defaultW, h: defaultH };
+      s.dashboardBlocks.push(block);
+    }),
     removeDashboardBlock: (id) => set((s) => {
       s.dashboardBlocks = s.dashboardBlocks.filter((b) => b.id !== id);
     }),

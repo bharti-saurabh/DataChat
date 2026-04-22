@@ -74,6 +74,8 @@ export interface DashboardBlock {
   title?: string;
   // insights
   insights?: string;
+  // Grid layout (react-grid-layout)
+  layout: { x: number; y: number; w: number; h: number };
 }
 
 export interface DemoConfig {
