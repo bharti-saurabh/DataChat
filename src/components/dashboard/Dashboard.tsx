@@ -272,15 +272,19 @@ function PresentationView({
       </div>
 
       <div className="flex-1 min-h-0 flex items-center justify-center px-12 py-4">
+        {/* Fixed height so ResponsiveContainer (recharts) gets a concrete pixel value */}
         <div
           className="w-full max-w-5xl bg-white dark:bg-gray-900 rounded-3xl shadow-2xl p-10 flex flex-col gap-4"
-          style={{ minHeight: "60vh", maxHeight: "75vh" }}
+          style={{ height: "68vh" }}
         >
           {current.title && (
             <h2 className="text-2xl font-bold text-gray-900 dark:text-gray-100 shrink-0">{current.title}</h2>
           )}
-          <div className="flex-1 min-h-0 overflow-hidden">
-            <BlockContent block={current} onUpdate={(patch) => onUpdate(current.id, patch)} />
+          {/* Give the content area an explicit height so charts can measure it */}
+          <div style={{ flex: 1, minHeight: 0, overflow: "hidden" }}>
+            <div style={{ width: "100%", height: "100%" }}>
+              <BlockContent block={current} onUpdate={(patch) => onUpdate(current.id, patch)} />
+            </div>
           </div>
         </div>
       </div>
@@ -356,7 +360,15 @@ export function Dashboard() {
       const el = document.getElementById("dashboard-grid-content");
       if (!el) throw new Error("Dashboard element not found");
 
-      const canvas = await html2canvas(el, { scale: 1.5, useCORS: true, backgroundColor: "#ffffff" });
+      // foreignObjectRendering lets html2canvas rasterize SVG gradients/filters used by Recharts
+      const canvas = await html2canvas(el, {
+        scale: 1.5,
+        useCORS: true,
+        allowTaint: true,
+        foreignObjectRendering: true,
+        backgroundColor: "#ffffff",
+        logging: false,
+      });
       const imgData = canvas.toDataURL("image/png");
       const pdf = new jsPDF({ orientation: "portrait", unit: "mm", format: "a4" });
       const pageW = pdf.internal.pageSize.getWidth();
