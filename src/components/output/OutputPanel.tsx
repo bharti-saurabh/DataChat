@@ -1,14 +1,15 @@
-import { useState, useCallback } from "react";
-import { BarChart2, Table, Code2, LayoutDashboard, Download, Plus, Loader2 } from "lucide-react";
+import { useState, useCallback, useRef, useEffect } from "react";
+import { BarChart2, Table, Code2, LayoutDashboard, Download, Plus, Loader2, Sparkles, ChevronDown, ChevronUp, Send } from "lucide-react";
 import { useDataStore } from "@/store/useDataStore";
 import { RechartsDisplay } from "@/components/output/RechartsDisplay";
 import { ResultsTable } from "@/components/results/ResultsTable";
 import { SQLEditorPopup } from "@/components/chat/SQLEditorPopup";
 import { InsightsCard } from "@/components/chat/InsightsCard";
 import { generatePythonCode } from "@/lib/pythonGen";
+import { editChartConfig } from "@/lib/chartGen";
 import { generateId } from "@/lib/utils";
 import { cn } from "@/lib/utils";
-import type { ChatMessage } from "@/types";
+import type { ChatMessage, ChartType } from "@/types";
 
 // lucide-react doesn't have a Python icon — use a text badge instead
 const PythonIcon = () => <span className="text-[10px] font-bold font-mono text-yellow-500">Py</span>;
@@ -22,14 +23,30 @@ const TAB_META: { id: Tab; icon: React.ReactNode; label: string }[] = [
 ];
 
 
+// ── Quick chart-type swap chips ───────────────────────────────────────────────
+const CHART_TYPES: { type: ChartType; label: string }[] = [
+  { type: "bar",     label: "Bar"    },
+  { type: "line",    label: "Line"   },
+  { type: "area",    label: "Area"   },
+  { type: "pie",     label: "Pie"    },
+  { type: "donut",   label: "Donut"  },
+  { type: "scatter", label: "Scatter"},
+];
+
 export function OutputPanel() {
-  const { messages, selectedMessageId, addDashboardBlock, addToast, llmSettings } = useDataStore();
+  const { messages, selectedMessageId, addDashboardBlock, addToast, llmSettings, updateMessage } = useDataStore();
 
   const [activeTab, setActiveTab] = useState<Tab>("visual");
   const [sqlOpen, setSqlOpen] = useState(false);
   const [pythonCode, setPythonCode] = useState<string | null>(null);
   const [pythonLoading, setPythonLoading] = useState(false);
   const [showPython, setShowPython] = useState(false);
+
+  // Chart editor state
+  const [editOpen, setEditOpen] = useState(false);
+  const [editInstruction, setEditInstruction] = useState("");
+  const [editLoading, setEditLoading] = useState(false);
+  const editInputRef = useRef<HTMLInputElement>(null);
 
   const msg: ChatMessage | undefined =
     (selectedMessageId ? messages.find((m) => m.id === selectedMessageId) : undefined) ??
@@ -44,13 +61,18 @@ export function OutputPanel() {
   const available: Record<Tab, boolean> = { visual: hasVisual, table: hasTable, query: hasSql };
   const currentTab = available[activeTab] ? activeTab : (TAB_META.find((t) => available[t.id])?.id ?? "visual");
 
-  // Reset python state when message changes
+  // Reset per-message UI state when selected message changes
   const msgId = msg?.id;
-  const lastMsgRef = { current: msgId };
-  if (lastMsgRef.current !== msgId) {
-    setPythonCode(null);
-    setShowPython(false);
-  }
+  const prevMsgId = useRef(msgId);
+  useEffect(() => {
+    if (prevMsgId.current !== msgId) {
+      prevMsgId.current = msgId;
+      setPythonCode(null);
+      setShowPython(false);
+      setEditInstruction("");
+      setEditOpen(false);
+    }
+  }, [msgId]);
 
   const handleAddChart = () => {
     if (!msg?.autoChartConfig) return;
@@ -76,6 +98,27 @@ export function OutputPanel() {
     const blob = new Blob([new XMLSerializer().serializeToString(svg)], { type: "image/svg+xml" });
     const a = document.createElement("a"); a.href = URL.createObjectURL(blob); a.download = "chart.svg"; a.click();
   };
+
+  // ── Chart editor ─────────────────────────────────────────────────────────────
+
+  const applyChartEdit = useCallback(async (instruction: string) => {
+    if (!msg?.autoChartConfig || !msg.result || !instruction.trim()) return;
+    setEditLoading(true);
+    try {
+      const newConfig = await editChartConfig(msg.autoChartConfig, instruction, msg.result, llmSettings);
+      updateMessage(msg.id, { autoChartConfig: newConfig });
+      setEditInstruction("");
+    } catch (e) {
+      addToast({ variant: "error", title: "Chart edit failed", message: String(e) });
+    } finally {
+      setEditLoading(false);
+    }
+  }, [msg, llmSettings, updateMessage, addToast]);
+
+  const swapChartType = useCallback((type: ChartType) => {
+    if (!msg?.autoChartConfig) return;
+    updateMessage(msg.id, { autoChartConfig: { ...msg.autoChartConfig, chartType: type } });
+  }, [msg, updateMessage]);
 
   const handleGeneratePython = useCallback(async () => {
     if (!msg?.sql || !msg.result) return;
@@ -131,10 +174,32 @@ export function OutputPanel() {
           <div className="flex flex-col gap-5">
             {/* Chart section */}
             {(hasChart) && (
-              <div>
-                <div className="flex items-center justify-between mb-2">
-                  <span className="text-[10px] font-semibold uppercase tracking-wider text-gray-400">Chart</span>
+              <div className="space-y-2">
+                {/* Header row */}
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-2">
+                    <span className="text-[10px] font-semibold uppercase tracking-wider text-gray-400">Chart</span>
+                    {msg.autoChartConfig && (
+                      <span className="text-[10px] px-1.5 py-0.5 rounded bg-gray-100 dark:bg-gray-800 text-gray-500 dark:text-gray-400 font-mono">
+                        {msg.autoChartConfig.chartType}
+                      </span>
+                    )}
+                  </div>
                   <div className="flex items-center gap-1">
+                    {msg.autoChartConfig && (
+                      <button
+                        onClick={() => { setEditOpen((v) => !v); setTimeout(() => editInputRef.current?.focus(), 50); }}
+                        className={cn(
+                          "flex items-center gap-1 px-2 py-1 rounded-lg text-[11px] border transition-colors",
+                          editOpen
+                            ? "bg-indigo-50 dark:bg-indigo-950/50 text-indigo-600 dark:text-indigo-400 border-indigo-300 dark:border-indigo-700"
+                            : "text-gray-500 dark:text-gray-400 border-gray-200 dark:border-gray-700 hover:border-indigo-300 dark:hover:border-indigo-700 hover:text-indigo-600 dark:hover:text-indigo-400",
+                        )}
+                      >
+                        <Sparkles size={10} /> Edit
+                        {editOpen ? <ChevronUp size={10} /> : <ChevronDown size={10} />}
+                      </button>
+                    )}
                     <button onClick={handleDownloadChart} title="Download SVG"
                       className="p-1.5 rounded-lg text-gray-400 hover:text-gray-600 hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors">
                       <Download size={12} />
@@ -147,6 +212,8 @@ export function OutputPanel() {
                     )}
                   </div>
                 </div>
+
+                {/* Chart render */}
                 {msg.autoChartLoading ? (
                   <div className="space-y-2">
                     <div className="shimmer h-5 w-1/2" />
@@ -157,6 +224,87 @@ export function OutputPanel() {
                     <RechartsDisplay config={msg.autoChartConfig} data={msg.result ?? []} />
                   </div>
                 ) : null}
+
+                {/* ── Chart editor ── */}
+                {editOpen && msg.autoChartConfig && (
+                  <div className="rounded-xl border border-indigo-100 dark:border-indigo-900 bg-indigo-50/40 dark:bg-indigo-950/20 p-3 space-y-2.5">
+                    {/* Quick chart-type swap */}
+                    <div>
+                      <p className="text-[10px] text-gray-400 mb-1.5 font-medium">Chart type</p>
+                      <div className="flex flex-wrap gap-1">
+                        {CHART_TYPES.map(({ type, label }) => (
+                          <button
+                            key={type}
+                            onClick={() => swapChartType(type)}
+                            className={cn(
+                              "px-2 py-0.5 rounded-full text-[11px] font-medium border transition-colors",
+                              msg.autoChartConfig?.chartType === type
+                                ? "bg-indigo-600 text-white border-indigo-600"
+                                : "bg-white dark:bg-gray-800 text-gray-600 dark:text-gray-400 border-gray-200 dark:border-gray-700 hover:border-indigo-400 dark:hover:border-indigo-600 hover:text-indigo-600 dark:hover:text-indigo-400",
+                            )}
+                          >
+                            {label}
+                          </button>
+                        ))}
+                      </div>
+                    </div>
+
+                    {/* Free-text AI instruction */}
+                    <div>
+                      <p className="text-[10px] text-gray-400 mb-1.5 font-medium">AI instruction</p>
+                      <div className="flex gap-2">
+                        <input
+                          ref={editInputRef}
+                          value={editInstruction}
+                          onChange={(e) => setEditInstruction(e.target.value)}
+                          onKeyDown={(e) => { if (e.key === "Enter" && !editLoading) applyChartEdit(editInstruction); }}
+                          placeholder="e.g. use Month on x-axis, show Revenue as area chart, add title…"
+                          disabled={editLoading}
+                          className="flex-1 text-xs px-3 py-2 rounded-lg border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-900 text-gray-700 dark:text-gray-300 placeholder:text-gray-400 focus:outline-none focus:ring-2 focus:ring-indigo-300 dark:focus:ring-indigo-700 disabled:opacity-60"
+                        />
+                        <button
+                          onClick={() => applyChartEdit(editInstruction)}
+                          disabled={!editInstruction.trim() || editLoading}
+                          className="flex items-center gap-1 px-3 py-2 rounded-lg bg-indigo-600 hover:bg-indigo-700 disabled:opacity-40 disabled:cursor-not-allowed text-white text-xs font-medium transition-colors"
+                        >
+                          {editLoading ? <Loader2 size={12} className="animate-spin" /> : <Send size={12} />}
+                          {editLoading ? "…" : "Apply"}
+                        </button>
+                      </div>
+                      {/* Suggestion chips */}
+                      <div className="flex flex-wrap gap-1 mt-1.5">
+                        {[
+                          "Add a descriptive title",
+                          "Show as percentage",
+                          "Switch axes",
+                          "Group by category",
+                        ].map((s) => (
+                          <button
+                            key={s}
+                            onClick={() => applyChartEdit(s)}
+                            disabled={editLoading}
+                            className="text-[10px] px-2 py-0.5 rounded-full bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 text-gray-500 dark:text-gray-400 hover:border-indigo-300 hover:text-indigo-600 dark:hover:text-indigo-400 transition-colors disabled:opacity-40"
+                          >
+                            {s}
+                          </button>
+                        ))}
+                      </div>
+                    </div>
+
+                    {/* Current config summary */}
+                    {msg.autoChartConfig && (
+                      <p className="text-[10px] text-gray-400 font-mono">
+                        x: <span className="text-gray-600 dark:text-gray-300">{msg.autoChartConfig.xKey}</span>
+                        {" · "}y: <span className="text-gray-600 dark:text-gray-300">
+                          {Array.isArray(msg.autoChartConfig.yKey) ? msg.autoChartConfig.yKey.join(", ") : msg.autoChartConfig.yKey}
+                        </span>
+                        {msg.autoChartConfig.title && (
+                          <>{" · "}<span className="text-gray-600 dark:text-gray-300">"{msg.autoChartConfig.title}"</span></>
+                        )}
+                      </p>
+                    )}
+                  </div>
+                )}
               </div>
             )}
 

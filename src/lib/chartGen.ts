@@ -52,3 +52,59 @@ ${sample}`;
 
   return config;
 }
+
+/**
+ * Edit an existing ChartConfig based on a free-text user instruction.
+ * Returns a new (or partially modified) ChartConfig.
+ */
+export async function editChartConfig(
+  current: ChartConfig,
+  instruction: string,
+  data: QueryRow[],
+  settings: LLMSettings,
+): Promise<ChartConfig> {
+  if (!data.length) throw new Error("No data");
+
+  const keys = Object.keys(data[0]);
+  const sample = JSON.stringify(data.slice(0, 5), null, 2);
+
+  const system = `You are a data visualization expert. The user has an existing chart and wants to modify it.
+Apply the user's instruction to produce an updated chart configuration.
+
+Available chart types: bar, line, area, pie, donut, scatter
+Available columns: ${keys.join(", ")}
+
+Rules:
+- Only change what the instruction asks for; keep everything else the same
+- xKey must be one of the available columns
+- yKey must be one column name OR an array of column names (all must be available columns)
+- Respond with ONLY valid JSON, no markdown:
+{ "chartType": "...", "xKey": "...", "yKey": "...", "title": "..." }`;
+
+  const user = `Current chart config:
+${JSON.stringify(current, null, 2)}
+
+User instruction: "${instruction}"
+
+Sample data (${data.length} rows total):
+${sample}
+
+Return the updated chart config JSON:`;
+
+  const raw = await callLLM({ system, user, settings });
+  const config = parseJSON<ChartConfig>(raw);
+
+  // Validate / fall back to current values
+  const validTypes = ["bar", "line", "area", "pie", "donut", "scatter"];
+  if (!validTypes.includes(config.chartType)) config.chartType = current.chartType;
+  if (!config.xKey || !keys.includes(config.xKey)) config.xKey = current.xKey;
+  if (!config.yKey) config.yKey = current.yKey;
+  if (Array.isArray(config.yKey)) {
+    const valid = config.yKey.filter((k) => keys.includes(k));
+    config.yKey = valid.length ? valid : current.yKey;
+  } else if (!keys.includes(config.yKey as string)) {
+    config.yKey = current.yKey;
+  }
+
+  return config;
+}
