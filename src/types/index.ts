@@ -15,6 +15,8 @@ export interface ColumnStats {
   min?: unknown;
   max?: unknown;
   avg?: number;
+  topValues?: string[];     // top 3–5 most frequent values
+  description?: string;     // AI-generated plain-English description
 }
 
 export interface TableSchema {
@@ -23,6 +25,7 @@ export interface TableSchema {
   columns: ColumnInfo[];
   rowCount?: number;
   preview?: QueryRow[];
+  columnStats?: ColumnStats[];  // cached after first expand
 }
 
 export type QueryRow = Record<string, unknown>;
@@ -74,6 +77,8 @@ export interface DashboardBlock {
   title?: string;
   // insights
   insights?: string;
+  // Presentation-mode per-slide annotations (editable heading + commentary)
+  slideAnnotations?: { heading?: string; commentary?: string };
   // Grid layout (react-grid-layout)
   layout: { x: number; y: number; w: number; h: number };
 }

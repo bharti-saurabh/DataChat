@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useRef, useCallback } from "react";
 // react-grid-layout v3 dropped WidthProvider. Use GridLayout + useContainerWidth hook.
 // The @types package is for v1; bypass stale types with a cast.
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -11,11 +11,13 @@ import {
   X, FileDown, LayoutDashboard, Trash2, Plus, Type, Heading, Minus,
   BarChart2, Table2, Lightbulb, Edit3, Check, GripVertical,
   ChevronLeft, ChevronRight, Presentation, FileText,
+  Sparkles, Loader2, RefreshCw,
 } from "lucide-react";
 import { useDataStore } from "@/store/useDataStore";
 import { RechartsDisplay } from "@/components/output/RechartsDisplay";
 import { ResultsTable } from "@/components/results/ResultsTable";
 import { InsightsCard } from "@/components/chat/InsightsCard";
+import { suggestSlideCommentary, rewriteCommentary } from "@/lib/schemaAI";
 import { generateId } from "@/lib/utils";
 import { cn } from "@/lib/utils";
 import type { DashboardBlock, BlockType } from "@/types";
@@ -70,21 +72,20 @@ function TextBlock({ block, onUpdate }: { block: DashboardBlock; onUpdate: (patc
 
   if (editing) {
     return (
-      <div className="space-y-1.5">
+      <div className="flex flex-col h-full gap-1.5">
         <textarea
           autoFocus value={draft}
           onChange={(e) => setDraft(e.target.value)}
           onKeyDown={(e) => { if (e.key === "Escape") save(); }}
-          rows={3}
-          className="w-full text-sm bg-transparent outline-none border border-indigo-200 dark:border-indigo-800 rounded-lg p-2 resize-none text-gray-700 dark:text-gray-300"
+          className="flex-1 w-full text-sm bg-transparent outline-none border border-indigo-200 dark:border-indigo-800 rounded-lg p-2 resize-none text-gray-700 dark:text-gray-300 min-h-[80px]"
         />
-        <button onClick={save} className="text-xs px-2.5 py-1 rounded-lg bg-indigo-600 text-white">Save</button>
+        <button onClick={save} className="shrink-0 text-xs px-2.5 py-1 rounded-lg bg-indigo-600 text-white self-end">Save</button>
       </div>
     );
   }
 
   return (
-    <div className="cursor-text flex items-start gap-2" onClick={() => setEditing(true)}>
+    <div className="cursor-text flex items-start gap-2 h-full" onClick={() => setEditing(true)}>
       <p className="text-sm text-gray-700 dark:text-gray-300 flex-1 leading-relaxed whitespace-pre-wrap">
         {block.content || <span className="text-gray-400 italic">Click to add text…</span>}
       </p>
@@ -241,6 +242,208 @@ function AddBlockMenu({ onAdd }: { onAdd: (type: BlockType, level?: 1 | 2 | 3) =
   );
 }
 
+// ── Editable presentation slide ───────────────────────────────────────────────
+
+const TONE_OPTIONS = [
+  { value: "concise",   label: "Concise"   },
+  { value: "formal",    label: "Formal"    },
+  { value: "executive", label: "Executive" },
+] as const;
+
+function EditableSlide({
+  block,
+  onUpdate,
+}: {
+  block: DashboardBlock;
+  onUpdate: (patch: Partial<DashboardBlock>) => void;
+}) {
+  const { llmSettings } = useDataStore();
+
+  // Slide heading (editable inline)
+  const heading = block.slideAnnotations?.heading ?? block.title ?? "";
+  const commentary = block.slideAnnotations?.commentary ?? "";
+
+  const [editingHeading, setEditingHeading] = useState(false);
+  const [headingDraft, setHeadingDraft] = useState(heading);
+  const [commentaryDraft, setCommentaryDraft] = useState(commentary);
+  const [aiLoading, setAiLoading] = useState(false);
+  const [showTones, setShowTones] = useState(false);
+
+  // Chart area resize: chartPct = % of slide card height for the chart
+  const [chartPct, setChartPct] = useState(55);
+  const slideRef = useRef<HTMLDivElement>(null);
+  const dragging = useRef(false);
+
+  const onResizeStart = useCallback((e: React.MouseEvent) => {
+    dragging.current = true;
+    e.preventDefault();
+    const onMove = (ev: MouseEvent) => {
+      if (!dragging.current || !slideRef.current) return;
+      const rect = slideRef.current.getBoundingClientRect();
+      const pct = ((ev.clientY - rect.top) / rect.height) * 100;
+      setChartPct(Math.min(Math.max(pct, 20), 78));
+    };
+    const onUp = () => {
+      dragging.current = false;
+      window.removeEventListener("mousemove", onMove);
+      window.removeEventListener("mouseup", onUp);
+    };
+    window.addEventListener("mousemove", onMove);
+    window.addEventListener("mouseup", onUp);
+  }, []);
+
+  const saveHeading = () => {
+    onUpdate({ slideAnnotations: { ...block.slideAnnotations, heading: headingDraft } });
+    setEditingHeading(false);
+  };
+
+  const saveCommentary = (val: string) => {
+    setCommentaryDraft(val);
+    onUpdate({ slideAnnotations: { ...block.slideAnnotations, commentary: val } });
+  };
+
+  const handleAISuggest = async () => {
+    if (!block.data?.length) return;
+    setAiLoading(true);
+    try {
+      const text = await suggestSlideCommentary(heading, block.data, block.insights, llmSettings);
+      setCommentaryDraft(text);
+      onUpdate({ slideAnnotations: { ...block.slideAnnotations, commentary: text } });
+    } catch { /* ignore */ }
+    finally { setAiLoading(false); }
+  };
+
+  const handleRewrite = async (tone: "formal" | "concise" | "executive") => {
+    if (!commentaryDraft.trim()) return;
+    setShowTones(false);
+    setAiLoading(true);
+    try {
+      const text = await rewriteCommentary(commentaryDraft, tone, llmSettings);
+      setCommentaryDraft(text);
+      onUpdate({ slideAnnotations: { ...block.slideAnnotations, commentary: text } });
+    } catch { /* ignore */ }
+    finally { setAiLoading(false); }
+  };
+
+  const hasVisual = block.type === "chart" || block.type === "table" || block.type === "insights";
+
+  return (
+    <div
+      ref={slideRef}
+      className="w-full max-w-5xl bg-white dark:bg-gray-900 rounded-3xl shadow-2xl flex flex-col overflow-hidden"
+      style={{ height: "76vh" }}
+    >
+      {/* ── Slide heading ── */}
+      <div className="shrink-0 px-10 pt-8 pb-3">
+        {editingHeading ? (
+          <div className="flex items-center gap-2">
+            <input
+              autoFocus
+              value={headingDraft}
+              onChange={(e) => setHeadingDraft(e.target.value)}
+              onKeyDown={(e) => { if (e.key === "Enter") saveHeading(); if (e.key === "Escape") setEditingHeading(false); }}
+              className="flex-1 text-2xl font-bold bg-transparent outline-none border-b-2 border-indigo-400 text-gray-900 dark:text-gray-100"
+            />
+            <button onClick={saveHeading} className="p-1 rounded text-green-500 hover:bg-green-50 dark:hover:bg-green-950">
+              <Check size={16} />
+            </button>
+          </div>
+        ) : (
+          <div className="flex items-center gap-2 group cursor-text" onClick={() => { setHeadingDraft(heading); setEditingHeading(true); }}>
+            <h2 className="text-2xl font-bold text-gray-900 dark:text-gray-100 flex-1">
+              {heading || <span className="text-gray-400 font-normal italic">Click to add slide title…</span>}
+            </h2>
+            <Edit3 size={14} className="opacity-0 group-hover:opacity-40 text-gray-400 shrink-0" />
+          </div>
+        )}
+      </div>
+
+      {/* ── Main content (chart/table/insights) with drag-resize ── */}
+      {hasVisual && (
+        <>
+          <div className="px-10 overflow-hidden shrink-0" style={{ height: `${chartPct}%` }}>
+            <div style={{ width: "100%", height: "100%" }}>
+              {block.type === "chart" && block.chartConfig && block.data && (
+                <RechartsDisplay config={block.chartConfig} data={block.data} />
+              )}
+              {block.type === "table" && block.data?.length && (
+                <div className="h-full overflow-auto">
+                  <ResultsTable data={block.data} />
+                </div>
+              )}
+              {block.type === "insights" && (
+                <div className="h-full overflow-auto">
+                  <InsightsCard insights={block.insights ?? block.content} />
+                </div>
+              )}
+            </div>
+          </div>
+
+          {/* Resize handle */}
+          <div
+            onMouseDown={onResizeStart}
+            className="shrink-0 h-2 mx-10 my-1 cursor-row-resize flex items-center justify-center group"
+          >
+            <div className="w-16 h-1 rounded-full bg-gray-200 dark:bg-gray-700 group-hover:bg-indigo-400 transition-colors" />
+          </div>
+        </>
+      )}
+
+      {/* ── Commentary area (fills remaining space) ── */}
+      <div className="flex-1 min-h-0 flex flex-col px-10 pb-8 gap-2" style={{ minHeight: hasVisual ? undefined : "60%" }}>
+        {/* Toolbar */}
+        <div className="shrink-0 flex items-center gap-2">
+          <span className="text-[10px] font-semibold uppercase tracking-wider text-gray-400">Commentary</span>
+          <div className="flex-1" />
+          {aiLoading ? (
+            <span className="flex items-center gap-1 text-xs text-indigo-400">
+              <Loader2 size={12} className="animate-spin" /> Generating…
+            </span>
+          ) : (
+            <>
+              <button
+                onClick={handleAISuggest}
+                disabled={!block.data?.length}
+                className="flex items-center gap-1 px-2 py-1 rounded-lg text-xs text-indigo-600 dark:text-indigo-400 hover:bg-indigo-50 dark:hover:bg-indigo-950/50 border border-indigo-200 dark:border-indigo-800 disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
+              >
+                <Sparkles size={11} /> AI Suggest
+              </button>
+              {commentaryDraft && (
+                <div className="relative">
+                  <button
+                    onClick={() => setShowTones((v) => !v)}
+                    className="flex items-center gap-1 px-2 py-1 rounded-lg text-xs text-gray-600 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-800 border border-gray-200 dark:border-gray-700 transition-colors"
+                  >
+                    <RefreshCw size={11} /> Rewrite
+                  </button>
+                  {showTones && (
+                    <div className="absolute right-0 top-full mt-1 w-36 bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-700 rounded-xl shadow-lg overflow-hidden z-20">
+                      {TONE_OPTIONS.map((t) => (
+                        <button key={t.value} onClick={() => handleRewrite(t.value)}
+                          className="w-full text-left px-3 py-2 text-xs hover:bg-indigo-50 dark:hover:bg-indigo-950/50 text-gray-700 dark:text-gray-300 transition-colors">
+                          {t.label}
+                        </button>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              )}
+            </>
+          )}
+        </div>
+
+        {/* Full-height textarea */}
+        <textarea
+          value={commentaryDraft}
+          onChange={(e) => saveCommentary(e.target.value)}
+          placeholder="Add commentary, key takeaways, or context for this slide… (or click AI Suggest)"
+          className="flex-1 w-full resize-none rounded-2xl border border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-800/50 px-4 py-3 text-sm text-gray-700 dark:text-gray-300 placeholder:text-gray-400 focus:outline-none focus:ring-2 focus:ring-indigo-300 dark:focus:ring-indigo-700 leading-relaxed"
+        />
+      </div>
+    </div>
+  );
+}
+
 // ── Presentation slide view ───────────────────────────────────────────────────
 
 function PresentationView({
@@ -267,29 +470,21 @@ function PresentationView({
 
   return (
     <div className="flex-1 flex flex-col min-h-0 bg-gradient-to-br from-gray-950 to-indigo-950">
-      <div className="shrink-0 text-center py-4 text-xs text-gray-500 font-medium tracking-widest uppercase">
+      {/* Slide counter */}
+      <div className="shrink-0 text-center py-3 text-xs text-gray-500 font-medium tracking-widest uppercase">
         {safeSlide + 1} / {total}
       </div>
 
-      <div className="flex-1 min-h-0 flex items-center justify-center px-12 py-4">
-        {/* Fixed height so ResponsiveContainer (recharts) gets a concrete pixel value */}
-        <div
-          className="w-full max-w-5xl bg-white dark:bg-gray-900 rounded-3xl shadow-2xl p-10 flex flex-col gap-4"
-          style={{ height: "68vh" }}
-        >
-          {current.title && (
-            <h2 className="text-2xl font-bold text-gray-900 dark:text-gray-100 shrink-0">{current.title}</h2>
-          )}
-          {/* Give the content area an explicit height so charts can measure it */}
-          <div style={{ flex: 1, minHeight: 0, overflow: "hidden" }}>
-            <div style={{ width: "100%", height: "100%" }}>
-              <BlockContent block={current} onUpdate={(patch) => onUpdate(current.id, patch)} />
-            </div>
-          </div>
-        </div>
+      {/* Slide card */}
+      <div className="flex-1 min-h-0 flex items-center justify-center px-8 py-2">
+        <EditableSlide
+          block={current}
+          onUpdate={(patch) => onUpdate(current.id, patch)}
+        />
       </div>
 
-      <div className="shrink-0 flex items-center justify-center gap-6 py-5">
+      {/* Navigation */}
+      <div className="shrink-0 flex items-center justify-center gap-6 py-4">
         <button
           onClick={() => setSlide((s) => Math.max(0, s - 1))}
           disabled={safeSlide === 0}
