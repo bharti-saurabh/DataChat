@@ -1,44 +1,54 @@
 import { callLLM } from "@/lib/llm";
-import { extractJSCode } from "@/lib/utils";
-import type { LLMSettings, QueryRow } from "@/types";
+import type { LLMSettings, QueryRow, ChartConfig } from "@/types";
 
-export async function generateChartCode(
+function parseJSON<T>(text: string): T {
+  const match = text.match(/```(?:json)?\s*([\s\S]*?)```/) ?? text.match(/(\{[\s\S]*\})/);
+  const raw = match ? match[1].trim() : text.trim();
+  return JSON.parse(raw) as T;
+}
+
+export async function generateChartConfig(
   data: QueryRow[],
   question: string,
-  description: string,
   settings: LLMSettings,
-): Promise<string> {
-  const system = `Write JS code to draw a ChartJS 4 chart.
-Write the code inside a \`\`\`js code fence.
-\`Chart\` is already imported and registered.
-Data is ALREADY available as \`data\`, an array of objects. Do not create it.
-Render inside a <canvas id="chart"> element like this:
+): Promise<ChartConfig> {
+  if (!data.length) throw new Error("No data to chart");
 
-\`\`\`js
-return new Chart(
-  document.getElementById("chart"),
-  {
-    type: "...",
-    options: { responsive: true, maintainAspectRatio: true, ... },
-    data: { ... },
-  }
-)
-\`\`\`
+  const keys = Object.keys(data[0]);
+  const sample = JSON.stringify(data.slice(0, 5), null, 2);
 
-Choose the most informative chart type automatically unless the description specifies one.
-Use clear labels. For large datasets aggregate to top 10-15 items to keep it readable.`;
+  const system = `You are a data visualization expert. Given query results, choose the best chart configuration.
+
+Available chart types: bar, line, area, pie, donut, scatter
+
+Rules:
+- bar: comparisons across categories
+- line/area: trends over time
+- pie/donut: part-to-whole (max 8 slices, use for <= 10 rows)
+- scatter: correlation between two numeric columns
+- xKey: column for x-axis or labels (usually categorical or date)
+- yKey: one column name (string) OR array of column names for multi-series
+
+Respond with ONLY valid JSON, no markdown:
+{ "chartType": "bar", "xKey": "column_name", "yKey": "column_name", "title": "Chart Title" }`;
 
   const user = `Question: ${question}
 
-// First 5 rows of result (full dataset available as \`data\`)
-data = ${JSON.stringify(data.slice(0, 5), null, 2)}
+Columns: ${keys.join(", ")}
+Sample data (${data.length} total rows):
+${sample}`;
 
-Total rows: ${data.length}
+  const raw = await callLLM({ system, user, settings });
+  const config = parseJSON<ChartConfig>(raw);
 
-IMPORTANT: ${description}`;
+  // Validate
+  const validTypes = ["bar", "line", "area", "pie", "donut", "scatter"];
+  if (!validTypes.includes(config.chartType)) config.chartType = "bar";
+  if (!config.xKey || !keys.includes(config.xKey)) config.xKey = keys[0];
+  if (!config.yKey) {
+    const numKey = keys.find((k, i) => i > 0 && typeof data[0][k] === "number");
+    config.yKey = numKey ?? keys[1] ?? keys[0];
+  }
 
-  const result = await callLLM({ system, user, settings });
-  const code = extractJSCode(result);
-  if (!code) throw new Error("No JS code block found in chart response");
-  return code;
+  return config;
 }

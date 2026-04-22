@@ -1,19 +1,16 @@
 import { useState } from "react";
-import { User, Bot, AlertCircle, ChevronDown, ChevronUp, Loader2 } from "lucide-react";
+import { User, Bot, AlertCircle, ChevronDown, ChevronUp, Loader2, BarChart2, Table2, Lightbulb } from "lucide-react";
 import { Marked } from "marked";
 import type { Tokens } from "marked";
 import { markedHighlight } from "marked-highlight";
 import hljs from "highlight.js";
 import type { ChatMessage } from "@/types";
 import { formatRelativeTime } from "@/lib/utils";
-import { ResultsTable } from "@/components/results/ResultsTable";
-import { SQLEditorPopup } from "@/components/chat/SQLEditorPopup";
-import { InsightsCard } from "@/components/chat/InsightsCard";
-import { ChartDisplay } from "@/components/chat/ChartDisplay";
 import { ClarifyingQuestions } from "@/components/chat/ClarifyingQuestions";
-import { FollowUpChips } from "@/components/chat/FollowUpChips";
+import { useDataStore } from "@/store/useDataStore";
+import { cn } from "@/lib/utils";
 
-// ── Marked setup ─────────────────────────────────────────────────────────────
+// ── Marked setup ──────────────────────────────────────────────────────────────
 const marked = new Marked(
   markedHighlight({
     langPrefix: "hljs language-",
@@ -54,24 +51,45 @@ interface MessageBubbleProps {
   message: ChatMessage;
   onClarifiedSubmit: (enrichedQuestion: string) => void;
   onFollowUp: (question: string) => void;
-  onChartCodeUpdate: (id: string, code: string) => void;
+}
+
+// ── Output summary badges ─────────────────────────────────────────────────────
+function OutputBadges({ message }: { message: ChatMessage }) {
+  const badges: { icon: React.ReactNode; label: string; color: string }[] = [];
+  if (message.autoChartConfig || message.autoChartLoading)
+    badges.push({ icon: <BarChart2 size={10} />, label: "Chart", color: "text-indigo-600 bg-indigo-50 dark:bg-indigo-950/50 dark:text-indigo-400" });
+  if (message.result && message.result.length > 0)
+    badges.push({ icon: <Table2 size={10} />, label: `${message.result.length} rows`, color: "text-cyan-600 bg-cyan-50 dark:bg-cyan-950/50 dark:text-cyan-400" });
+  if (message.insights || message.insightsLoading)
+    badges.push({ icon: <Lightbulb size={10} />, label: "Insights", color: "text-amber-600 bg-amber-50 dark:bg-amber-950/50 dark:text-amber-400" });
+  if (!badges.length) return null;
+  return (
+    <div className="flex flex-wrap gap-1 mt-1.5">
+      {badges.map((b, i) => (
+        <span key={i} className={cn("flex items-center gap-1 text-[10px] font-medium px-1.5 py-0.5 rounded-md", b.color)}>
+          {b.icon}{b.label}
+        </span>
+      ))}
+    </div>
+  );
 }
 
 // ── Component ─────────────────────────────────────────────────────────────────
-export function MessageBubble({ message, onClarifiedSubmit, onFollowUp, onChartCodeUpdate }: MessageBubbleProps) {
-  const [sqlOpen, setSqlOpen] = useState(false);
+export function MessageBubble({ message, onClarifiedSubmit, onFollowUp }: MessageBubbleProps) {
   const [reasoningOpen, setReasoningOpen] = useState(false);
+  const { selectedMessageId, setSelectedMessageId } = useDataStore();
+  const isSelected = selectedMessageId === message.id;
 
   // ── User bubble ──────────────────────────────────────────────────────────
   if (message.role === "user") {
     return (
-      <div className="flex gap-3 justify-end">
-        <div className="max-w-[80%] bg-blue-600 text-white rounded-2xl rounded-tr-sm px-4 py-2.5">
-          <p className="text-sm whitespace-pre-wrap">{message.question}</p>
-          <p className="text-[10px] text-blue-200 mt-1 text-right">{formatRelativeTime(message.timestamp)}</p>
+      <div className="flex gap-2.5 justify-end">
+        <div className="max-w-[75%] bg-indigo-600 text-white rounded-2xl rounded-tr-sm px-3.5 py-2.5">
+          <p className="text-sm whitespace-pre-wrap leading-relaxed">{message.question}</p>
+          <p className="text-[10px] text-indigo-300 mt-1 text-right">{formatRelativeTime(message.timestamp)}</p>
         </div>
-        <div className="w-7 h-7 rounded-full bg-blue-100 dark:bg-blue-950 flex items-center justify-center shrink-0 mt-1">
-          <User size={14} className="text-blue-600" />
+        <div className="w-7 h-7 rounded-full bg-indigo-100 dark:bg-indigo-950 flex items-center justify-center shrink-0 mt-1">
+          <User size={13} className="text-indigo-600" />
         </div>
       </div>
     );
@@ -80,9 +98,9 @@ export function MessageBubble({ message, onClarifiedSubmit, onFollowUp, onChartC
   // ── Clarifying questions bubble ──────────────────────────────────────────
   if (message.role === "clarifying") {
     return (
-      <div className="flex gap-3">
+      <div className="flex gap-2.5">
         <div className="w-7 h-7 rounded-full bg-gray-100 dark:bg-gray-800 flex items-center justify-center shrink-0 mt-1">
-          <Bot size={14} className="text-gray-500" />
+          <Bot size={13} className="text-gray-500" />
         </div>
         <div className="flex-1 min-w-0">
           <ClarifyingQuestions
@@ -97,15 +115,15 @@ export function MessageBubble({ message, onClarifiedSubmit, onFollowUp, onChartC
     );
   }
 
-  // ── Assistant loading (skeleton) ─────────────────────────────────────────
-  if (!message.content && !message.error && !message.autoChartLoading) {
+  // ── Assistant loading ────────────────────────────────────────────────────
+  if (!message.content && !message.error) {
     return (
-      <div className="flex gap-3">
+      <div className="flex gap-2.5">
         <div className="w-7 h-7 rounded-full bg-gray-100 dark:bg-gray-800 flex items-center justify-center shrink-0 mt-1">
-          <Bot size={14} className="text-gray-500" />
+          <Bot size={13} className="text-gray-500" />
         </div>
-        <div className="flex items-center gap-2 text-sm text-gray-500">
-          <Loader2 size={14} className="animate-spin" /> Thinking…
+        <div className="flex items-center gap-2 text-sm text-gray-400">
+          <Loader2 size={13} className="animate-spin" /> Thinking…
         </div>
       </div>
     );
@@ -113,83 +131,74 @@ export function MessageBubble({ message, onClarifiedSubmit, onFollowUp, onChartC
 
   const htmlContent = message.content ? (marked.parse(message.content) as string) : "";
 
-  // ── Assistant full bubble ────────────────────────────────────────────────
+  // ── Assistant bubble ─────────────────────────────────────────────────────
   return (
-    <div className="flex gap-3">
+    <div className="flex gap-2.5">
       <div className="w-7 h-7 rounded-full bg-gray-100 dark:bg-gray-800 flex items-center justify-center shrink-0 mt-1">
-        <Bot size={14} className="text-gray-500" />
+        <Bot size={13} className="text-gray-500" />
       </div>
 
-      <div className="flex-1 min-w-0 space-y-3">
-        {/* Error */}
-        {message.error && (
-          <div className="flex items-start gap-2 rounded-lg bg-red-50 dark:bg-red-950/30 border border-red-200 dark:border-red-800 p-3 text-sm text-red-700 dark:text-red-300">
-            <AlertCircle size={14} className="mt-0.5 shrink-0" />
-            <span>{message.error}</span>
-          </div>
-        )}
+      <div className="flex-1 min-w-0">
+        {/* Clickable card — selects this message in output panel */}
+        <button
+          onClick={() => setSelectedMessageId(message.id)}
+          className={cn(
+            "w-full text-left rounded-xl border px-3.5 py-2.5 transition-all",
+            isSelected
+              ? "border-indigo-300 dark:border-indigo-700 bg-indigo-50/60 dark:bg-indigo-950/30 shadow-sm"
+              : "border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-900 hover:border-indigo-200 dark:hover:border-indigo-800 hover:bg-gray-50 dark:hover:bg-gray-800/60"
+          )}
+        >
+          {/* Error */}
+          {message.error ? (
+            <div className="flex items-start gap-2 text-sm text-red-600 dark:text-red-400">
+              <AlertCircle size={13} className="mt-0.5 shrink-0" />
+              <span className="text-xs">{message.error}</span>
+            </div>
+          ) : (
+            <p className="text-xs text-gray-500 dark:text-gray-400">
+              {isSelected ? "Showing in output panel →" : "Click to view output →"}
+            </p>
+          )}
 
-        {/* 1. Chart FIRST */}
-        <ChartDisplay
-          chartCode={message.autoChartCode}
-          chartLoading={message.autoChartLoading}
-          data={message.result ?? []}
-          question={message.question}
-          insights={message.insights}
-          messageId={message.id}
-          onRegenerate={(code) => onChartCodeUpdate(message.id, code)}
-        />
+          {/* Output badges */}
+          {(message.autoChartConfig || message.autoChartLoading || message.result?.length || message.insights || message.insightsLoading) && (
+            <OutputBadges message={message} />
+          )}
+        </button>
 
-        {/* 2. Insights */}
-        <InsightsCard insights={message.insights} loading={message.insightsLoading} />
-
-        {/* 3. LLM reasoning (collapsible) */}
+        {/* Reasoning (collapsible) */}
         {message.content && (
-          <div>
+          <div className="mt-1.5">
             <button
               onClick={() => setReasoningOpen((v) => !v)}
-              className="flex items-center gap-1 text-xs text-gray-400 hover:text-gray-600 dark:hover:text-gray-300 mb-1"
+              className="flex items-center gap-1 text-[11px] text-gray-400 hover:text-gray-600 dark:hover:text-gray-300"
             >
-              {reasoningOpen ? <ChevronUp size={12} /> : <ChevronDown size={12} />}
+              {reasoningOpen ? <ChevronUp size={11} /> : <ChevronDown size={11} />}
               {reasoningOpen ? "Hide reasoning" : "Show reasoning"}
             </button>
             {reasoningOpen && (
               <div
-                className="prose-sql text-sm text-gray-700 dark:text-gray-300 bg-gray-50 dark:bg-gray-800/50 rounded-lg p-3 overflow-x-auto"
+                className="prose-sql text-sm text-gray-700 dark:text-gray-300 bg-gray-50 dark:bg-gray-800/50 rounded-xl p-3 mt-1.5 overflow-x-auto"
                 dangerouslySetInnerHTML={{ __html: htmlContent }}
               />
             )}
           </div>
         )}
 
-        {/* 4. SQL pill */}
-        {message.sql && (
-          <div>
-            <button
-              onClick={() => setSqlOpen((v) => !v)}
-              className="flex items-center gap-2 px-3 py-1.5 rounded-lg bg-gray-100 dark:bg-gray-800 text-xs font-mono text-gray-600 dark:text-gray-400 hover:bg-gray-200 dark:hover:bg-gray-700 transition-colors max-w-full"
-            >
-              <code className="truncate max-w-[300px]">{message.sql.split("\n")[0]}</code>
-              {sqlOpen ? <ChevronUp size={12} /> : <ChevronDown size={12} />}
-            </button>
-            {sqlOpen && <SQLEditorPopup sql={message.sql} onClose={() => setSqlOpen(false)} />}
+        {/* Follow-up chips (inline in chat) */}
+        {message.suggestions && message.suggestions.length > 0 && (
+          <div className="flex flex-wrap gap-1.5 mt-2">
+            {message.suggestions.map((s) => (
+              <button key={s} onClick={() => onFollowUp(s)}
+                className="text-xs px-2.5 py-1 rounded-full border border-gray-200 dark:border-gray-700 text-gray-500 dark:text-gray-400 hover:border-indigo-400 hover:text-indigo-600 dark:hover:text-indigo-400 transition-colors bg-white dark:bg-gray-900">
+                {s}
+              </button>
+            ))}
           </div>
         )}
 
-        {/* 5. Results table */}
-        {message.result && message.result.length > 0 && (
-          <ResultsTable data={message.result} question={message.question} />
-        )}
-        {message.result && message.result.length === 0 && !message.error && (
-          <p className="text-sm text-gray-500 italic">No results found.</p>
-        )}
-
-        {/* 6. Follow-up chips */}
-        {message.suggestions && message.suggestions.length > 0 && (
-          <FollowUpChips suggestions={message.suggestions} onSelect={onFollowUp} />
-        )}
-
-        <p className="text-[10px] text-gray-400">{formatRelativeTime(message.timestamp)}</p>
+        <p className="text-[10px] text-gray-400 mt-1.5">{formatRelativeTime(message.timestamp)}</p>
       </div>
     </div>
   );

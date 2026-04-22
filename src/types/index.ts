@@ -27,6 +27,17 @@ export interface TableSchema {
 
 export type QueryRow = Record<string, unknown>;
 
+// ── Chart config (replaces raw chartCode eval approach) ──────────────────────
+export type ChartType = "bar" | "line" | "area" | "pie" | "donut" | "scatter";
+
+export interface ChartConfig {
+  chartType: ChartType;
+  xKey: string;
+  yKey: string | string[];
+  title?: string;
+}
+
+// ── Chat ─────────────────────────────────────────────────────────────────────
 export interface ChatMessage {
   id: string;
   role: "user" | "assistant" | "clarifying";
@@ -38,8 +49,8 @@ export interface ChatMessage {
   // Insights
   insights?: string;
   insightsLoading?: boolean;
-  // Auto-generated chart
-  autoChartCode?: string;
+  // Auto-generated chart (JSON config, replaces chartCode eval)
+  autoChartConfig?: ChartConfig;
   autoChartLoading?: boolean;
   // Clarifying questions (role === "clarifying")
   clarifyingQuestions?: string[];
@@ -48,11 +59,20 @@ export interface ChatMessage {
   timestamp: number;
 }
 
-export interface DashboardChart {
+// ── Notion Dashboard blocks ───────────────────────────────────────────────────
+export type BlockType = "chart" | "table" | "insights" | "heading" | "text" | "divider";
+
+export interface DashboardBlock {
   id: string;
-  title: string;
-  chartCode: string;
-  data: QueryRow[];
+  type: BlockType;
+  // heading / text
+  content?: string;
+  level?: 1 | 2 | 3;        // for heading blocks
+  // chart
+  chartConfig?: ChartConfig;
+  data?: QueryRow[];
+  title?: string;
+  // insights
   insights?: string;
 }
 
@@ -90,4 +110,4 @@ export interface Toast {
   message?: string;
 }
 
-export type SidebarTab = "schema" | "sessions" | "explorer";
+export type SidebarTab = "schema" | "sessions";

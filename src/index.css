@@ -1,13 +1,23 @@
 @import "tailwindcss";
 
 @theme {
-  --color-primary: #2563eb;
-  --color-primary-hover: #1d4ed8;
-  --font-sans: system-ui, "Segoe UI", Roboto, sans-serif;
+  --color-primary: #6366f1;
+  --color-primary-hover: #4f46e5;
+  --font-sans: "Inter", system-ui, "Segoe UI", Roboto, sans-serif;
   --font-mono: ui-monospace, Consolas, monospace;
 }
 
-/* Markdown content from LLM */
+/* ── Holographic palette ────────────────────────────────────────────────────── */
+:root {
+  --holo-1: #6366f1;
+  --holo-2: #8b5cf6;
+  --holo-3: #ec4899;
+  --holo-4: #06b6d4;
+  --holo-5: #10b981;
+  --holo-6: #f59e0b;
+}
+
+/* ── Markdown / LLM content ─────────────────────────────────────────────────── */
 .prose-sql pre {
   @apply bg-gray-100 dark:bg-gray-800 rounded p-3 overflow-x-auto text-sm;
 }
@@ -22,19 +32,73 @@
   @apply border border-gray-300 dark:border-gray-600 px-2 py-1;
 }
 
-/* Highlight.js theme override for dark mode */
+/* ── Highlight.js ───────────────────────────────────────────────────────────── */
 .hljs {
   @apply bg-transparent;
 }
 
-/* Thin scrollbar */
-::-webkit-scrollbar {
-  width: 6px;
-  height: 6px;
-}
-::-webkit-scrollbar-track {
-  @apply bg-transparent;
-}
+/* ── Scrollbar ──────────────────────────────────────────────────────────────── */
+::-webkit-scrollbar { width: 5px; height: 5px; }
+::-webkit-scrollbar-track { background: transparent; }
 ::-webkit-scrollbar-thumb {
-  @apply bg-gray-300 dark:bg-gray-600 rounded-full;
+  background: rgba(99, 102, 241, 0.2);
+  border-radius: 3px;
+}
+::-webkit-scrollbar-thumb:hover {
+  background: rgba(99, 102, 241, 0.4);
+}
+
+/* ── Output panel resize handle ─────────────────────────────────────────────── */
+.output-panel-resize {
+  cursor: col-resize;
+  user-select: none;
+}
+
+/* ── Holographic chart glow ─────────────────────────────────────────────────── */
+.chart-glow {
+  filter: drop-shadow(0 0 8px rgba(99, 102, 241, 0.3));
+}
+
+/* ── Gradient text ──────────────────────────────────────────────────────────── */
+.gradient-text {
+  background: linear-gradient(135deg, #6366f1, #8b5cf6, #ec4899);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+}
+
+/* ── Shimmer loading ────────────────────────────────────────────────────────── */
+@keyframes shimmer {
+  0%   { background-position: -200% center; }
+  100% { background-position:  200% center; }
+}
+.shimmer {
+  background: linear-gradient(90deg, #f0f2ff 25%, #e8ebff 50%, #f0f2ff 75%);
+  background-size: 200% auto;
+  animation: shimmer 1.4s linear infinite;
+  border-radius: 6px;
+}
+.dark .shimmer {
+  background: linear-gradient(90deg, #1e1e2e 25%, #252535 50%, #1e1e2e 75%);
+  background-size: 200% auto;
+  animation: shimmer 1.4s linear infinite;
+}
+
+/* ── Notion block ───────────────────────────────────────────────────────────── */
+.notion-block {
+  position: relative;
+}
+.notion-block-controls {
+  position: absolute;
+  left: -2rem;
+  top: 50%;
+  transform: translateY(-50%);
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  opacity: 0;
+  transition: opacity 0.15s ease;
+}
+.notion-block:hover .notion-block-controls {
+  opacity: 1;
 }
