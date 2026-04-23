@@ -71,8 +71,13 @@ export function ChatPanel() {
     const priorContext = messages
       .slice(-8)
       .filter((m) => m.role === "user" || (m.role === "assistant" && m.sql))
-      .map((m) => (m.role === "user" ? `User asked: ${m.question}` : `SQL used: ${m.sql}`))
-      .join("\n");
+      .map((m) => {
+        if (m.role === "user") return `User asked: ${m.question}`;
+        const cols = m.result?.length ? Object.keys(m.result[0]).join(", ") : "";
+        const rows = m.result?.length ?? 0;
+        return `SQL used:\n${m.sql}${cols ? `\nResult: ${rows} rows, columns: ${cols}` : ""}`;
+      })
+      .join("\n\n");
 
     const systemPrompt = `You are an expert SQLite query writer. The user has a SQLite dataset.
 
@@ -80,7 +85,7 @@ ${context ? `Context about the dataset:\n${context}\n` : ""}
 SQLite schema:
 ${schemaSQL}
 
-${priorContext ? `Prior conversation:\n${priorContext}\n` : ""}
+${priorContext ? `Prior conversation:\n${priorContext}\n\nIMPORTANT: If the user's new question is a refinement of the previous query (e.g. "show top 10 only", "filter by X", "sort by Y", "exclude Z"), modify the previous SQL to achieve the refinement rather than writing a brand new query from scratch.\n` : ""}
 Answer following these steps:
 1. Guess their objective.
 2. Describe steps to achieve it in SQL.

@@ -9,7 +9,8 @@ import { ResultsTable } from "@/components/results/ResultsTable";
 import { SQLEditorPopup } from "@/components/chat/SQLEditorPopup";
 import { InsightsCard } from "@/components/chat/InsightsCard";
 import { generatePythonCode } from "@/lib/pythonGen";
-import { editChartConfig } from "@/lib/chartGen";
+import { editChartData } from "@/lib/chartGen";
+import { getDB } from "@/lib/db";
 import { generateId } from "@/lib/utils";
 import { cn } from "@/lib/utils";
 import type { ChatMessage, ChartConfig, ChartType } from "@/types";
@@ -246,10 +247,22 @@ export function OutputPanel() {
 
   const applyChartEdit = useCallback(async (instruction: string) => {
     if (!msg?.autoChartConfig || !msg.result || !instruction.trim()) return;
+    const currentSQL = msg.sql ?? "";
+    if (!currentSQL) {
+      addToast({ variant: "warning", title: "No SQL available", message: "Original SQL not found — only visual changes will apply." });
+    }
     setEditLoading(true);
     try {
-      const newConfig = await editChartConfig(msg.autoChartConfig, instruction, msg.result, llmSettings);
-      updateMessage(msg.id, { autoChartConfig: newConfig });
+      const { sql, config, dataChanged } = await editChartData(
+        currentSQL, msg.autoChartConfig, instruction, msg.result, llmSettings
+      );
+      if (dataChanged && sql && sql !== currentSQL && currentSQL) {
+        const db = await getDB();
+        const newRows = db.exec(sql, { rowMode: "object" }) as import("@/types").QueryRow[];
+        updateMessage(msg.id, { sql, result: newRows, autoChartConfig: config, insights: undefined });
+      } else {
+        updateMessage(msg.id, { autoChartConfig: config });
+      }
       setEditInstruction("");
     } catch (e) {
       addToast({ variant: "error", title: "Chart edit failed", message: String(e) });

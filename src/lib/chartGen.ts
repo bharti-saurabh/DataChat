@@ -54,6 +54,77 @@ ${sample}`;
 }
 
 /**
+ * Edit chart data AND/OR visual config based on a free-text user instruction.
+ * If the instruction implies a data change (filter, limit, sort, aggregate),
+ * returns a modified SQL; otherwise only changes the visual config.
+ */
+export async function editChartData(
+  currentSQL: string,
+  currentConfig: ChartConfig,
+  instruction: string,
+  data: QueryRow[],
+  settings: LLMSettings,
+): Promise<{ sql: string; config: ChartConfig; dataChanged: boolean }> {
+  if (!data.length) throw new Error("No data");
+
+  const keys = Object.keys(data[0]);
+  const sample = JSON.stringify(data.slice(0, 5), null, 2);
+
+  const system = `You are a data + visualization expert. The user has a chart with existing SQL and wants to modify it conversationally.
+
+Determine whether the instruction requires:
+A) A data change (filter rows, limit rows, change grouping, change sorting, aggregate differently) → modify the SQL
+B) Only a visual change (chart type, axis, colors) → keep SQL unchanged
+
+Current SQL:
+\`\`\`sql
+${currentSQL}
+\`\`\`
+
+Available columns from current result: ${keys.join(", ")}
+Sample data (${data.length} rows total):
+${sample}
+
+Rules:
+- If filtering/limiting/sorting: wrap or rewrite the SQL to apply the change. Use SQLite syntax.
+- Keep the column names in the result identical if possible so the chart config still works.
+- If only visual, return the original SQL unchanged.
+- xKey and yKey must reference columns that will exist in the result.
+- yKey can be a string or array of strings.
+- chartType: bar | line | area | pie | donut | scatter
+
+Respond with ONLY valid JSON (no markdown):
+{
+  "sql": "SELECT ...",
+  "config": { "chartType": "...", "xKey": "...", "yKey": "..." },
+  "dataChanged": true
+}`;
+
+  const user = `Current chart config:
+${JSON.stringify(currentConfig, null, 2)}
+
+User instruction: "${instruction}"
+
+Return the updated JSON:`;
+
+  const raw = await callLLM({ system, user, settings });
+  const parsed = parseJSON<{ sql: string; config: ChartConfig; dataChanged: boolean }>(raw);
+
+  // Validate
+  const validTypes = ["bar", "line", "area", "pie", "donut", "scatter"];
+  const cfg = parsed.config ?? currentConfig;
+  if (!validTypes.includes(cfg.chartType)) cfg.chartType = currentConfig.chartType;
+  if (!cfg.xKey) cfg.xKey = currentConfig.xKey;
+  if (!cfg.yKey) cfg.yKey = currentConfig.yKey;
+
+  return {
+    sql: parsed.sql ?? currentSQL,
+    config: { ...currentConfig, ...cfg },
+    dataChanged: !!parsed.dataChanged,
+  };
+}
+
+/**
  * Edit an existing ChartConfig based on a free-text user instruction.
  * Returns a new (or partially modified) ChartConfig.
  */
