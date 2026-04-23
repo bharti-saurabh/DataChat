@@ -10,7 +10,7 @@ import { SQLEditorPopup } from "@/components/chat/SQLEditorPopup";
 import { InsightsCard } from "@/components/chat/InsightsCard";
 import { generatePythonCode } from "@/lib/pythonGen";
 import { editChartData } from "@/lib/chartGen";
-import { getDB } from "@/lib/db";
+import { runQuery } from "@/lib/db";
 import { generateId } from "@/lib/utils";
 import { cn } from "@/lib/utils";
 import type { ChatMessage, ChartConfig, ChartType } from "@/types";
@@ -257,8 +257,7 @@ export function OutputPanel() {
         currentSQL, msg.autoChartConfig, instruction, msg.result, llmSettings
       );
       if (dataChanged && sql && sql !== currentSQL && currentSQL) {
-        const db = await getDB();
-        const newRows = db.exec(sql, { rowMode: "object" }) as import("@/types").QueryRow[];
+        const newRows = await runQuery(sql);
         updateMessage(msg.id, { sql, result: newRows, autoChartConfig: config, insights: undefined });
       } else {
         updateMessage(msg.id, { autoChartConfig: config });

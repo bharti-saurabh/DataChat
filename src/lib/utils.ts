@@ -1,6 +1,5 @@
 import { type ClassValue, clsx } from "clsx";
 import { twMerge } from "tailwind-merge";
-import { dsvFormat } from "d3-dsv";
 import type { QueryRow } from "@/types";
 
 export function cn(...inputs: ClassValue[]) {
@@ -23,8 +22,13 @@ export function downloadFile(content: string, filename: string, type: string) {
 
 export function exportCSV(data: QueryRow[], filename = "datachat.csv") {
   if (data.length === 0) return;
-  const csv = dsvFormat(",").format(data);
-  downloadFile(csv, filename, "text/csv");
+  const escape = (v: unknown) => {
+    const s = v === null || v === undefined ? "" : String(v);
+    return s.includes(",") || s.includes('"') || s.includes("\n") ? `"${s.replace(/"/g, '""')}"` : s;
+  };
+  const headers = Object.keys(data[0]);
+  const rows = [headers.join(","), ...data.map((row) => headers.map((h) => escape(row[h])).join(","))];
+  downloadFile(rows.join("\n"), filename, "text/csv");
 }
 
 export async function exportExcel(data: QueryRow[], filename = "datachat.xlsx") {

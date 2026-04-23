@@ -5,9 +5,9 @@ import {
   AlertTriangle, CheckCircle2, Link2, KeyRound, ShieldAlert, Columns2,
 } from "lucide-react";
 import { useDataStore } from "@/store/useDataStore";
-import { computeColumnStats, loadForeignKeys } from "@/lib/explorerStats";
+import { computeColumnStats } from "@/lib/explorerStats";
 import { generateColumnDescription } from "@/lib/schemaAI";
-import { getDB } from "@/lib/db";
+import { dropAllTables } from "@/lib/db";
 import { cn } from "@/lib/utils";
 import type { TableSchema, ColumnInfo, ColumnStats, ForeignKeyInfo, QueryRow } from "@/types";
 
@@ -222,9 +222,8 @@ function TableItem({ table, onStatsLoaded, onDescriptionGenerated, onFKsLoaded }
     if (next && (!table.columnStats || !table.foreignKeys)) {
       setStatsLoading(true);
       try {
-        const db = await getDB();
-        if (!table.columnStats) { const stats = await computeColumnStats(db, table.name, table.columns); onStatsLoaded(table.name, stats); }
-        if (!table.foreignKeys) { const fks = loadForeignKeys(db, table.name); onFKsLoaded(table.name, fks); }
+        if (!table.columnStats) { const stats = await computeColumnStats(table.name, table.columns); onStatsLoaded(table.name, stats); }
+        if (!table.foreignKeys) { onFKsLoaded(table.name, []); }
       } catch { /* ignore */ }
       finally { setStatsLoading(false); }
     }
@@ -484,8 +483,7 @@ export function SchemaExplorer({ onColumnClick: _onColumnClick }: SchemaExplorer
     : schemas;
 
   async function handleLoadNewData() {
-    const db = await getDB();
-    db.dropAllTables();
+    await dropAllTables();
     setSchemas([]); clearMessages(); setSuggestedQuestions([]);
   }
 

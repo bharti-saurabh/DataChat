@@ -1,7 +1,7 @@
 import { useRef, useEffect, useCallback, useState } from "react";
 import { Send, Sparkles, Loader2 } from "lucide-react";
 import { useDataStore } from "@/store/useDataStore";
-import { getDB } from "@/lib/db";
+import { runQuery } from "@/lib/db";
 import { callLLM } from "@/lib/llm";
 import { generateId, extractSQL } from "@/lib/utils";
 import { addQueryHistory, upsertSession } from "@/lib/persistence";
@@ -66,7 +66,6 @@ export function ChatPanel() {
 
   // ── Core query execution ────────────────────────────────────────────────────
   const executeQuery = useCallback(async (question: string) => {
-    const db = await getDB();
     const schemaSQL = schemas.map((s) => s.sql).join("\n\n");
     const priorContext = messages
       .slice(-8)
@@ -79,10 +78,10 @@ export function ChatPanel() {
       })
       .join("\n\n");
 
-    const systemPrompt = `You are an expert SQLite query writer. The user has a SQLite dataset.
+    const systemPrompt = `You are an expert DuckDB query writer. The user has a dataset loaded in DuckDB.
 
 ${context ? `Context about the dataset:\n${context}\n` : ""}
-SQLite schema:
+Schema:
 ${schemaSQL}
 
 ${priorContext ? `Prior conversation:\n${priorContext}\n\nIMPORTANT: If the user's new question is a refinement of the previous query (e.g. "show top 10 only", "filter by X", "sort by Y", "exclude Z"), modify the previous SQL to achieve the refinement rather than writing a brand new query from scratch.\n` : ""}
@@ -90,10 +89,10 @@ Answer following these steps:
 1. Guess their objective.
 2. Describe steps to achieve it in SQL.
 3. Build the logic by identifying tables and relationships.
-4. Write SQL to answer the question. Use SQLite syntax.
+4. Write SQL to answer the question. Use DuckDB SQL syntax (window functions, CTEs, QUALIFY, PIVOT all supported).
 
 Replace generic filter values by querying a random value from the data.
-Always use [Table].[Column] notation.`;
+Always use "TableName"."ColumnName" notation.`;
 
     const assistantMsgId = generateId();
     addMessage({ id: assistantMsgId, role: "assistant", timestamp: Date.now() });
@@ -108,7 +107,7 @@ Always use [Table].[Column] notation.`;
       let error: string | undefined;
 
       try {
-        result = db.exec(sql, { rowMode: "object" }) as import("@/types").QueryRow[];
+        result = await runQuery(sql);
       } catch (e) {
         error = String(e);
       }

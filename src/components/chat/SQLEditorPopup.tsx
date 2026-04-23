@@ -2,7 +2,7 @@ import { useState, useCallback } from "react";
 import Editor from "@monaco-editor/react";
 import { Play, X, Wand2, Loader2 } from "lucide-react";
 import { useDataStore } from "@/store/useDataStore";
-import { getDB } from "@/lib/db";
+import { runQuery } from "@/lib/db";
 import { callLLM } from "@/lib/llm";
 import type { QueryRow } from "@/types";
 import { ResultsTable } from "@/components/results/ResultsTable";
@@ -25,8 +25,7 @@ export function SQLEditorPopup({ sql: initialSQL, onClose }: SQLEditorPopupProps
     setError(null);
     setResult(null);
     try {
-      const db = await getDB();
-      const data = db.exec(sql, { rowMode: "object" });
+      const data = await runQuery(sql);
       setResult(data);
     } catch (e) {
       setError(String(e));
@@ -41,7 +40,7 @@ export function SQLEditorPopup({ sql: initialSQL, onClose }: SQLEditorPopupProps
     try {
       const schemaSQL = schemas.map((s) => s.sql).join("\n\n");
       const response = await callLLM({
-        system: `You are an expert SQLite query writer. Fix the SQL query that caused an error.
+        system: `You are an expert DuckDB query writer. Fix the SQL query that caused an error.
 Schema:
 ${schemaSQL}
 

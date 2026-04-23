@@ -9,13 +9,16 @@ import { QueryHistory } from "@/components/chat/QueryHistory";
 import { SettingsPanel } from "@/components/settings/SettingsPanel";
 import { Dashboard } from "@/components/dashboard/Dashboard";
 import { DataExplorerModal } from "@/components/explorer/DataExplorerModal";
+import { BentoGrid } from "@/components/grid/BentoGrid";
+import { PromptBar } from "@/components/layout/PromptBar";
+import { DataSourceModal } from "@/components/datasource/DataSourceModal";
 import { useDataStore } from "@/store/useDataStore";
 import { getDB } from "@/lib/db";
 import { loadLLMSettings, saveLLMSettings } from "@/lib/persistence";
 import { DEFAULT_LLM_SETTINGS } from "@/lib/llm";
 
 export default function App() {
-  const { theme, sidebarOpen, schemas, setDbReady, setLLMSettings } = useDataStore();
+  const { theme, sidebarOpen, schemas, setDbReady, setLLMSettings, mode } = useDataStore();
 
   // Apply theme
   useEffect(() => {
@@ -55,38 +58,74 @@ export default function App() {
     <div className="flex flex-col h-screen bg-gray-50 dark:bg-gray-950 text-gray-900 dark:text-gray-100 overflow-hidden">
       <Navbar />
 
-      <div className="flex flex-1 min-h-0">
-        {/* Sidebar */}
-        {sidebarOpen && (
-          <aside className="flex flex-col w-56 shrink-0 border-r border-gray-200 dark:border-gray-800 bg-white dark:bg-gray-950">
-            <SidebarShell />
-          </aside>
-        )}
+      {mode === "analyst" ? (
+        <div className="flex flex-1 min-h-0">
+          {/* Sidebar */}
+          {sidebarOpen && (
+            <aside className="flex flex-col w-56 shrink-0 border-r border-gray-200 dark:border-gray-800 bg-white dark:bg-gray-950">
+              <SidebarShell />
+            </aside>
+          )}
 
-        {/* Main */}
-        <main className="flex-1 flex min-w-0 overflow-hidden">
-          {!hasData ? (
-            <div className="flex-1 overflow-y-auto">
-              <div className="max-w-3xl mx-auto px-6 py-10 space-y-8">
-                <div className="text-center space-y-2">
-                  <h1 className="text-4xl font-bold bg-gradient-to-r from-indigo-600 via-violet-600 to-pink-500 bg-clip-text text-transparent">
-                    DataChat
-                  </h1>
-                  <p className="text-gray-500 dark:text-gray-400">
-                    Talk to your dataset in natural language
-                  </p>
+          {/* Main */}
+          <main className="flex-1 flex min-w-0 overflow-hidden">
+            {!hasData ? (
+              <div className="flex-1 overflow-y-auto">
+                <div className="max-w-3xl mx-auto px-6 py-10 space-y-8">
+                  <div className="text-center space-y-2">
+                    <h1 className="text-4xl font-bold bg-gradient-to-r from-indigo-600 via-violet-600 to-pink-500 bg-clip-text text-transparent">
+                      DataChat
+                    </h1>
+                    <p className="text-gray-500 dark:text-gray-400">
+                      Talk to your dataset in natural language
+                    </p>
+                  </div>
+                  <FileUpload />
+                  <DemoGrid />
                 </div>
+              </div>
+            ) : (
+              <ChatPanel />
+            )}
+          </main>
+        </div>
+      ) : (
+        /* Explorer mode */
+        <div className="relative flex-1 min-h-0 overflow-hidden bg-[var(--bg-base)]">
+          {/* Ambient orbs */}
+          <div className="pointer-events-none absolute inset-0 overflow-hidden">
+            <div className="absolute -top-40 -left-40 w-[600px] h-[600px] rounded-full bg-indigo-500/10 blur-[120px]" />
+            <div className="absolute -bottom-40 -right-40 w-[500px] h-[500px] rounded-full bg-violet-500/10 blur-[120px]" />
+          </div>
+
+          {!hasData ? (
+            <div className="relative z-10 flex flex-col items-center justify-center h-full gap-6 p-8">
+              <div className="text-center space-y-2 mb-4">
+                <h1 className="text-4xl font-bold bg-gradient-to-r from-indigo-500 via-violet-500 to-pink-500 bg-clip-text text-transparent">
+                  DataChat Explorer
+                </h1>
+                <p className="text-[var(--text-2)] text-sm">
+                  Load a dataset to start building dashboards
+                </p>
+              </div>
+              <div className="w-full max-w-xl">
                 <FileUpload />
-                <DemoGrid />
               </div>
             </div>
           ) : (
-            <ChatPanel />
+            <div className="relative z-10 flex flex-col h-full">
+              <div className="flex-1 min-h-0">
+                <BentoGrid />
+              </div>
+              <PromptBar />
+            </div>
           )}
-        </main>
-      </div>
 
-      {/* Full-screen overlays */}
+          <DataSourceModal />
+        </div>
+      )}
+
+      {/* Full-screen overlays (analyst mode) */}
       <Dashboard />
       <DataExplorerModal />
       <QueryHistory />

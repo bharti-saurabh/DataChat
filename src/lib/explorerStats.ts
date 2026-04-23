@@ -1,35 +1,18 @@
-import type { ColumnInfo, ColumnStats, ForeignKeyInfo } from "@/types";
-import type { DB } from "@/lib/db";
-
-/** Load foreign key relationships for a table via SQLite PRAGMA. */
-export function loadForeignKeys(db: DB, tableName: string): ForeignKeyInfo[] {
-  try {
-    const safe = tableName.replace(/"/g, '""');
-    const rows = db.exec(`PRAGMA foreign_key_list("${safe}")`, {
-      rowMode: "object",
-    }) as Record<string, unknown>[];
-    return rows.map((r) => ({
-      column: String(r.from ?? ""),
-      refTable: String(r.table ?? ""),
-      refColumn: String(r.to ?? ""),
-    }));
-  } catch {
-    return [];
-  }
-}
+import type { ColumnInfo, ColumnStats } from "@/types";
+import { runQuery } from "@/lib/db";
 
 export async function computeColumnStats(
-  db: DB,
   tableName: string,
   columns: ColumnInfo[],
 ): Promise<ColumnStats[]> {
-  return columns.map((col) => {
-    const quoted = JSON.stringify(col.name);
-    const tq = JSON.stringify(tableName);
-    const isNumeric = /INT|REAL|FLOAT|NUMERIC|DOUBLE|DECIMAL/i.test(col.type);
+  const results: ColumnStats[] = [];
+
+  for (const col of columns) {
+    const quoted = `"${col.name.replace(/"/g, '""')}"`;
+    const tq = `"${tableName.replace(/"/g, '""')}"`;
+    const isNumeric = /INT|REAL|FLOAT|NUMERIC|DOUBLE|DECIMAL|BIGINT|HUGEINT/i.test(col.type);
 
     try {
-      // ── Aggregate stats ──────────────────────────────────────────────────
       const q = isNumeric
         ? `SELECT COUNT(*) as total, COUNT(DISTINCT ${quoted}) as distinct_count,
               SUM(CASE WHEN ${quoted} IS NULL THEN 1 ELSE 0 END) as null_count,
@@ -39,32 +22,29 @@ export async function computeColumnStats(
               SUM(CASE WHEN ${quoted} IS NULL THEN 1 ELSE 0 END) as null_count
            FROM ${tq}`;
 
-      const rows = db.exec(q, { rowMode: "object" }) as Record<string, unknown>[];
+      const rows = await runQuery(q);
       const r = rows[0] ?? {};
       const total = Number(r.total ?? 0);
       const distinct = Number(r.distinct_count ?? 0);
       const nullCount = Number(r.null_count ?? 0);
 
-      // ── Top frequent values (skip for high-cardinality numeric columns) ──
       let topValues: string[] | undefined;
-      // Only fetch top values for low-ish cardinality or text columns
       const shouldFetchTop = !isNumeric || distinct <= 20;
       if (shouldFetchTop && total > 0) {
         try {
-          const tvRows = db.exec(
+          const tvRows = await runQuery(
             `SELECT ${quoted} as val, COUNT(*) as cnt
              FROM ${tq}
              WHERE ${quoted} IS NOT NULL
              GROUP BY ${quoted}
              ORDER BY cnt DESC
-             LIMIT 5`,
-            { rowMode: "object" },
-          ) as Record<string, unknown>[];
+             LIMIT 5`
+          );
           topValues = tvRows.map((tv) => String(tv.val ?? "")).filter(Boolean);
         } catch { /* ignore */ }
       }
 
-      return {
+      results.push({
         columnName: col.name,
         total,
         distinct,
@@ -73,9 +53,11 @@ export async function computeColumnStats(
         max: isNumeric ? r.max_val : undefined,
         avg: isNumeric ? (r.avg_val != null ? Number(r.avg_val) : undefined) : undefined,
         topValues,
-      };
+      });
     } catch {
-      return { columnName: col.name, total: 0, distinct: 0, nullCount: 0 };
+      results.push({ columnName: col.name, total: 0, distinct: 0, nullCount: 0 });
     }
-  });
+  }
+
+  return results;
 }

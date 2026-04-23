@@ -1,126 +1,135 @@
-import sqlite3InitModule from "@sqlite.org/sqlite-wasm";
-import { dsvFormat, autoType } from "d3-dsv";
+import * as duckdb from "@duckdb/duckdb-wasm";
+import * as XLSX from "xlsx";
 import type { TableSchema, QueryRow } from "@/types";
 
-// SQLite is initialized once as a module-level singleton
-type Sqlite3Module = Awaited<ReturnType<typeof sqlite3InitModule>>;
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-type SQLiteDB = any; // oo1.DB is not strongly typed in the WASM package
+let dbInstance: duckdb.AsyncDuckDB | null = null;
+let connInstance: duckdb.AsyncDuckDBConnection | null = null;
 
-let db: ReturnType<typeof createDB> | null = null;
-let rawDb: SQLiteDB | null = null;
+export async function getDB(): Promise<{ db: duckdb.AsyncDuckDB; conn: duckdb.AsyncDuckDBConnection }> {
+  if (dbInstance && connInstance) return { db: dbInstance, conn: connInstance };
 
-const DEFAULT_DB = "@";
-
-function createDB(s3: Awaited<ReturnType<typeof sqlite3InitModule>>, raw: SQLiteDB) {
-  return {
-    exec(sql: string, opts?: { rowMode?: "object" | "array" }) {
-      return raw.exec(sql, opts ?? {}) as QueryRow[];
-    },
-    prepare(sql: string) {
-      return raw.prepare(sql);
-    },
-    schema(): TableSchema[] {
-      const tables = raw.exec("SELECT name, sql FROM sqlite_master WHERE type='table'", { rowMode: "object" }) as {
-        name: string;
-        sql: string;
-      }[];
-      return tables.map((table) => ({
-        ...table,
-        columns: raw.exec(`PRAGMA table_info(${JSON.stringify(table.name)})`, { rowMode: "object" }) as TableSchema["columns"],
-      }));
-    },
-    schemaSQL(): string {
-      return this.schema()
-        .map((t) => t.sql)
-        .join("\n\n");
-    },
-    tablePreview(tableName: string, limit = 5): QueryRow[] {
-      return raw.exec(`SELECT * FROM ${JSON.stringify(tableName)} LIMIT ${limit}`, { rowMode: "object" }) as QueryRow[];
-    },
-    tableRowCount(tableName: string): number {
-      const result = raw.exec(`SELECT COUNT(*) as cnt FROM ${JSON.stringify(tableName)}`, { rowMode: "object" }) as {
-        cnt: number;
-      }[];
-      return result[0]?.cnt ?? 0;
-    },
-    dropAllTables() {
-      const tables = raw.exec("SELECT name FROM sqlite_master WHERE type='table'", { rowMode: "object" }) as {
-        name: string;
-      }[];
-      for (const { name } of tables) {
-        raw.exec(`DROP TABLE IF EXISTS ${JSON.stringify(name)}`);
-      }
-    },
-    async uploadSQLite(file: File): Promise<void> {
-      const buf = await file.arrayBuffer();
-      s3.capi.sqlite3_js_posix_create_file(file.name, buf);
-      const uploadDB = new s3.oo1.DB(file.name, "r") as SQLiteDB;
-      const tables = uploadDB.exec("SELECT name, sql FROM sqlite_master WHERE type='table'", { rowMode: "object" }) as {
-        name: string;
-        sql: string;
-      }[];
-      for (const { name, sql } of tables) {
-        raw.exec(`DROP TABLE IF EXISTS ${JSON.stringify(name)}`);
-        raw.exec(sql);
-        const data = uploadDB.exec(`SELECT * FROM ${JSON.stringify(name)}`, { rowMode: "object" }) as QueryRow[];
-        if (data.length > 0) {
-          const cols = Object.keys(data[0]);
-          const insertSQL = `INSERT INTO ${JSON.stringify(name)} (${cols.map((c) => JSON.stringify(c)).join(", ")}) VALUES (${cols.map(() => "?").join(", ")})`;
-          const stmt = raw.prepare(insertSQL);
-          raw.exec("BEGIN TRANSACTION");
-          for (const row of data) stmt.bind(cols.map((c) => row[c])).stepReset();
-          raw.exec("COMMIT");
-          stmt.finalize();
-        }
-      }
-      uploadDB.close();
-    },
-    async uploadCSV(file: File, separator = ","): Promise<string> {
-      const text = await file.text();
-      const rows = dsvFormat(separator).parse(text, autoType);
-      const tableName = file.name.replace(/\.[^.]+$/, "").replace(/[^a-zA-Z0-9_]/g, "_");
-      insertRows(raw, tableName, rows as QueryRow[]);
-      return tableName;
-    },
-  };
+  const BUNDLES = duckdb.getJsDelivrBundles();
+  const bundle = await duckdb.selectBundle(BUNDLES);
+  const workerUrl = URL.createObjectURL(
+    new Blob([`importScripts("${bundle.mainWorker!}");`], { type: "text/javascript" })
+  );
+  const worker = new Worker(workerUrl);
+  const logger = new duckdb.ConsoleLogger(duckdb.LogLevel.ERROR);
+  dbInstance = new duckdb.AsyncDuckDB(logger, worker);
+  await dbInstance.instantiate(bundle.mainModule, bundle.mainWorker);
+  URL.revokeObjectURL(workerUrl);
+  connInstance = await dbInstance.connect();
+  return { db: dbInstance, conn: connInstance };
 }
 
-function insertRows(raw: SQLiteDB, tableName: string, rows: QueryRow[]) {
-  if (rows.length === 0) return;
-  const cols = Object.keys(rows[0]);
-  const typeMap: Record<string, string> = {};
-  for (const col of cols) {
-    const v = rows[0][col];
-    if (typeof v === "number") typeMap[col] = Number.isInteger(v) ? "INTEGER" : "REAL";
-    else if (typeof v === "boolean") typeMap[col] = "INTEGER";
-    else typeMap[col] = "TEXT";
+export async function loadFile(file: File): Promise<TableSchema[]> {
+  const { db, conn } = await getDB();
+  const name = file.name.replace(/[^a-zA-Z0-9_]/g, "_").replace(/^_+/, "t_");
+
+  if (/\.(csv|tsv|txt)$/i.test(file.name)) {
+    await db.registerFileHandle(file.name, file, duckdb.DuckDBDataProtocol.BROWSER_FILEREADER, true);
+    const sep = /\.tsv$/i.test(file.name) ? "\\t" : ",";
+    await conn.query(`CREATE OR REPLACE TABLE "${name}" AS SELECT * FROM read_csv_auto('${file.name}', sep='${sep}', header=true)`);
+  } else if (/\.(xlsx|xls)$/i.test(file.name)) {
+    const buf = await file.arrayBuffer();
+    const wb = XLSX.read(buf);
+    for (const sheetName of wb.SheetNames) {
+      const csv = XLSX.utils.sheet_to_csv(wb.Sheets[sheetName]);
+      const csvFile = new File([csv], `${sheetName}.csv`);
+      const tname = sheetName.replace(/[^a-zA-Z0-9_]/g, "_");
+      await db.registerFileHandle(`${sheetName}.csv`, csvFile, duckdb.DuckDBDataProtocol.BROWSER_FILEREADER, true);
+      await conn.query(`CREATE OR REPLACE TABLE "${tname}" AS SELECT * FROM read_csv_auto('${sheetName}.csv', header=true)`);
+    }
+  } else if (/\.json$/i.test(file.name)) {
+    await db.registerFileHandle(file.name, file, duckdb.DuckDBDataProtocol.BROWSER_FILEREADER, true);
+    await conn.query(`CREATE OR REPLACE TABLE "${name}" AS SELECT * FROM read_json_auto('${file.name}')`);
+  } else if (/\.parquet$/i.test(file.name)) {
+    await db.registerFileHandle(file.name, file, duckdb.DuckDBDataProtocol.BROWSER_FILEREADER, true);
+    await conn.query(`CREATE OR REPLACE TABLE "${name}" AS SELECT * FROM read_parquet('${file.name}')`);
+  } else if (/\.(db|sqlite|sqlite3)$/i.test(file.name)) {
+    await db.registerFileHandle(file.name, file, duckdb.DuckDBDataProtocol.BROWSER_FILEREADER, true);
+    await conn.query(`ATTACH '${file.name}' AS sqlite_db (TYPE SQLITE)`);
+    const tables = await conn.query(`SELECT table_name FROM information_schema.tables WHERE table_schema='sqlite_db'`);
+    for (const row of tables.toArray()) {
+      const t = (row as Record<string, unknown>).table_name as string;
+      await conn.query(`CREATE OR REPLACE TABLE "${t}" AS SELECT * FROM sqlite_db."${t}"`);
+    }
+    await conn.query(`DETACH sqlite_db`);
   }
-  raw.exec(`CREATE TABLE IF NOT EXISTS ${JSON.stringify(tableName)} (${cols.map((c) => `${JSON.stringify(c)} ${typeMap[c]}`).join(", ")})`);
-  const insertSQL = `INSERT INTO ${JSON.stringify(tableName)} (${cols.map((c) => JSON.stringify(c)).join(", ")}) VALUES (${cols.map(() => "?").join(", ")})`;
-  const stmt = raw.prepare(insertSQL);
-  raw.exec("BEGIN TRANSACTION");
-  for (const row of rows) {
-    stmt
-      .bind(
-        cols.map((c) => {
-          const v = row[c];
-          return v instanceof Date ? v.toISOString() : v;
-        }),
-      )
-      .stepReset();
+
+  return getSchemas();
+}
+
+export async function loadURL(url: string, tableName: string): Promise<TableSchema[]> {
+  const { conn } = await getDB();
+  const safe = tableName.replace(/[^a-zA-Z0-9_]/g, "_");
+  if (url.endsWith(".parquet")) {
+    await conn.query(`CREATE OR REPLACE TABLE "${safe}" AS SELECT * FROM read_parquet('${url}')`);
+  } else if (url.endsWith(".json")) {
+    await conn.query(`CREATE OR REPLACE TABLE "${safe}" AS SELECT * FROM read_json_auto('${url}')`);
+  } else {
+    await conn.query(`CREATE OR REPLACE TABLE "${safe}" AS SELECT * FROM read_csv_auto('${url}', header=true)`);
   }
-  raw.exec("COMMIT");
-  stmt.finalize();
+  return getSchemas();
 }
 
-export async function getDB() {
-  if (db) return db;
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const s3 = await (sqlite3InitModule as any)({ printErr: console.error }) as Sqlite3Module;
-  rawDb = new s3.oo1.DB(DEFAULT_DB, "c") as SQLiteDB;
-  db = createDB(s3, rawDb);
-  return db;
+export async function runQuery(sql: string): Promise<QueryRow[]> {
+  const { conn } = await getDB();
+  const result = await conn.query(sql);
+  return result.toArray().map((row) =>
+    Object.fromEntries(
+      Object.entries(row as object).map(([k, v]) => [k, typeof v === "bigint" ? Number(v) : v])
+    )
+  ) as QueryRow[];
 }
 
-export type DB = Awaited<ReturnType<typeof getDB>>;
+export async function getSchemas(): Promise<TableSchema[]> {
+  const { conn } = await getDB();
+  const tables = await conn.query(
+    `SELECT table_name FROM information_schema.tables WHERE table_schema='main' AND table_type='BASE TABLE'`
+  );
+  const schemas: TableSchema[] = [];
+  for (const row of tables.toArray()) {
+    const name = (row as Record<string, unknown>).table_name as string;
+    const cols = await conn.query(`DESCRIBE "${name}"`);
+    const columns = cols.toArray().map((r, i) => {
+      const rr = r as Record<string, unknown>;
+      return { cid: i, name: rr.column_name as string, type: rr.column_type as string, notnull: 0, dflt_value: null, pk: 0 };
+    });
+    const countRes = await conn.query(`SELECT COUNT(*) as n FROM "${name}"`);
+    const rowCount = Number((countRes.toArray()[0] as Record<string, unknown>).n);
+    schemas.push({
+      name,
+      sql: `-- Table: ${name}\n${columns.map((c) => `--  ${c.name} ${c.type}`).join("\n")}`,
+      columns,
+      rowCount,
+    });
+  }
+  return schemas;
+}
+
+export async function tablePreview(tableName: string, limit = 5): Promise<QueryRow[]> {
+  return runQuery(`SELECT * FROM "${tableName}" LIMIT ${limit}`);
+}
+
+export async function tableRowCount(tableName: string): Promise<number> {
+  const rows = await runQuery(`SELECT COUNT(*) as cnt FROM "${tableName}"`);
+  return Number(rows[0]?.cnt ?? 0);
+}
+
+export async function dropAllTables(): Promise<void> {
+  const schemas = await getSchemas();
+  const { conn } = await getDB();
+  for (const { name } of schemas) {
+    await conn.query(`DROP TABLE IF EXISTS "${name}"`);
+  }
+}
+
+export async function pasteData(text: string, tableName: string): Promise<TableSchema[]> {
+  const { db, conn } = await getDB();
+  const csvFile = new File([text], `${tableName}.csv`);
+  await db.registerFileHandle(`${tableName}.csv`, csvFile, duckdb.DuckDBDataProtocol.BROWSER_FILEREADER, true);
+  const safe = tableName.replace(/[^a-zA-Z0-9_]/g, "_");
+  await conn.query(`CREATE OR REPLACE TABLE "${safe}" AS SELECT * FROM read_csv_auto('${tableName}.csv', header=true)`);
+  return getSchemas();
+}

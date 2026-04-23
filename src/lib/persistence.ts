@@ -1,5 +1,5 @@
 import Dexie, { type Table } from "dexie";
-import type { ChatMessage, LLMSettings } from "@/types";
+import type { ChatMessage, LLMSettings, ExplorerDashboard } from "@/types";
 
 export interface SavedSession {
   id: string;
@@ -25,6 +25,7 @@ class DataChatDB extends Dexie {
   sessions!: Table<SavedSession, string>;
   queryHistory!: Table<QueryHistoryItem, string>;
   settings!: Table<{ key: string; value: unknown }, string>;
+  explorerDashboards!: Table<ExplorerDashboard, string>;
 
   constructor() {
     super("datachat");
@@ -32,6 +33,12 @@ class DataChatDB extends Dexie {
       sessions: "id, name, createdAt, updatedAt, messageCount",
       queryHistory: "id, sessionId, timestamp, pinned",
       settings: "key",
+    });
+    this.version(3).stores({
+      sessions: "id, name, createdAt, updatedAt, messageCount",
+      queryHistory: "id, sessionId, timestamp, pinned",
+      settings: "key",
+      explorerDashboards: "id, updatedAt",
     });
   }
 }
@@ -86,4 +93,17 @@ export async function togglePinQuery(id: string) {
 
 export async function deleteQueryHistory(id: string) {
   await dexieDB.queryHistory.delete(id);
+}
+
+// ── Explorer dashboards ───────────────────────────────────────────────────────
+export async function saveExplorerDashboard(d: ExplorerDashboard): Promise<void> {
+  await dexieDB.explorerDashboards.put(d);
+}
+
+export async function loadExplorerDashboards(): Promise<ExplorerDashboard[]> {
+  return dexieDB.explorerDashboards.orderBy("updatedAt").reverse().toArray();
+}
+
+export async function deleteExplorerDashboard(id: string): Promise<void> {
+  await dexieDB.explorerDashboards.delete(id);
 }

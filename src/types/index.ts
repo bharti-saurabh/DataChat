@@ -1,3 +1,7 @@
+// ── App mode ──────────────────────────────────────────────────────────────────
+export type AppMode = "analyst" | "explorer";
+
+// ── Columns ───────────────────────────────────────────────────────────────────
 export interface ColumnInfo {
   cid: number;
   name: string;
@@ -15,14 +19,14 @@ export interface ColumnStats {
   min?: unknown;
   max?: unknown;
   avg?: number;
-  topValues?: string[];     // top 3–5 most frequent values
-  description?: string;     // AI-generated plain-English description
+  topValues?: string[];
+  description?: string;
 }
 
 export interface ForeignKeyInfo {
-  column: string;       // local column name
-  refTable: string;     // referenced table
-  refColumn: string;    // referenced column
+  column: string;
+  refTable: string;
+  refColumn: string;
 }
 
 export interface TableSchema {
@@ -31,8 +35,8 @@ export interface TableSchema {
   columns: ColumnInfo[];
   rowCount?: number;
   preview?: QueryRow[];
-  columnStats?: ColumnStats[];  // cached after first expand
-  foreignKeys?: ForeignKeyInfo[]; // loaded via PRAGMA on first expand
+  columnStats?: ColumnStats[];
+  foreignKeys?: ForeignKeyInfo[];
 }
 
 export type QueryRow = Record<string, unknown>;
@@ -45,11 +49,10 @@ export interface ChartConfig {
   xKey: string;
   yKey: string | string[];
   title?: string;
-  // Advanced
-  colors?: string[];                         // per-series color overrides
-  dualAxis?: boolean;                        // enable right Y-axis
-  rightAxisKeys?: string[];                  // series rendered on right axis
-  seriesTypes?: Record<string, ChartType>;   // per-series type (mixed charts)
+  colors?: string[];
+  dualAxis?: boolean;
+  rightAxisKeys?: string[];
+  seriesTypes?: Record<string, ChartType>;
 }
 
 // ── Slide text block ──────────────────────────────────────────────────────────
@@ -59,55 +62,81 @@ export interface SlideTextBlock {
   format: "heading" | "body" | "caption" | "key";
 }
 
-// ── Chat ─────────────────────────────────────────────────────────────────────
+// ── Chat (Analyst mode) ───────────────────────────────────────────────────────
 export interface ChatMessage {
   id: string;
   role: "user" | "assistant" | "clarifying";
   question?: string;
-  content?: string;           // markdown LLM reasoning
-  sql?: string;               // extracted SQL
-  result?: QueryRow[];        // query rows
+  content?: string;
+  sql?: string;
+  result?: QueryRow[];
   error?: string;
-  // Insights
   insights?: string;
   insightsLoading?: boolean;
-  // Auto-generated chart (JSON config, replaces chartCode eval)
   autoChartConfig?: ChartConfig;
   autoChartLoading?: boolean;
-  // Clarifying questions (role === "clarifying")
   clarifyingQuestions?: string[];
-  // Post-execution follow-up chips
   suggestions?: string[];
   timestamp: number;
 }
 
-// ── Notion Dashboard blocks ───────────────────────────────────────────────────
+// ── Analyst dashboard blocks ──────────────────────────────────────────────────
 export type BlockType = "chart" | "table" | "insights" | "heading" | "text" | "divider";
 
 export interface DashboardBlock {
   id: string;
   type: BlockType;
-  // heading / text
   content?: string;
-  level?: 1 | 2 | 3;        // for heading blocks
-  // chart
+  level?: 1 | 2 | 3;
   chartConfig?: ChartConfig;
   data?: QueryRow[];
   title?: string;
-  // insights
   insights?: string;
-  // Source query (used for auto-populating presentation slide heading)
   question?: string;
-  // Presentation-mode per-slide annotations
   slideAnnotations?: {
     heading?: string;
-    textBlocks?: SlideTextBlock[];           // rich text blocks (replaces commentary)
-    shownSections?: ("table" | "insights")[]; // extra content panels
+    textBlocks?: SlideTextBlock[];
+    shownSections?: ("table" | "insights")[];
   };
-  // Grid layout (react-grid-layout)
   layout: { x: number; y: number; w: number; h: number };
 }
 
+// ── Explorer widgets ──────────────────────────────────────────────────────────
+export type WidgetType = "kpi" | "chart" | "table" | "insight";
+
+export interface WidgetLayout {
+  x: number;
+  y: number;
+  w: number;
+  h: number;
+}
+
+export interface Widget {
+  id: string;
+  type: WidgetType;
+  title: string;
+  sql?: string;
+  chartType?: ChartType;
+  xKey?: string;
+  yKey?: string | string[];
+  insight?: string;
+  layout: WidgetLayout;
+  data?: QueryRow[];
+  loading?: boolean;
+  error?: string;
+  commentary?: string;
+  commentaryLoading?: boolean;
+}
+
+export interface ExplorerDashboard {
+  id: string;
+  name: string;
+  widgets: Widget[];
+  createdAt: number;
+  updatedAt: number;
+}
+
+// ── Shared ────────────────────────────────────────────────────────────────────
 export interface DemoConfig {
   title: string;
   body: string;
@@ -122,6 +151,13 @@ export interface LLMSettings {
   model: string;
   temperature: number;
 }
+
+export const DEFAULT_LLM_SETTINGS: LLMSettings = {
+  baseUrl: "https://llmfoundry.straive.com/openai/v1",
+  apiKey: "",
+  model: "gpt-4.1-mini",
+  temperature: 0,
+};
 
 export interface Session {
   id: string;

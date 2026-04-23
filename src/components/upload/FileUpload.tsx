@@ -1,65 +1,48 @@
 import { useRef, useState, useCallback } from "react";
 import { Upload, FileSpreadsheet, Database } from "lucide-react";
 import { useDataStore } from "@/store/useDataStore";
-import { getDB } from "@/lib/db";
+import { loadFile, getSchemas } from "@/lib/db";
 import { callLLMJSON } from "@/lib/llm";
 import { cn } from "@/lib/utils";
 
-const ACCEPTED = ".csv,.sqlite3,.db,.sqlite,.s3db,.sl3";
+const ACCEPTED = ".csv,.tsv,.xlsx,.xls,.json,.parquet,.sqlite3,.db,.sqlite,.s3db,.sl3";
 
 export function FileUpload() {
   const inputRef = useRef<HTMLInputElement>(null);
   const [dragging, setDragging] = useState(false);
   const [uploading, setUploading] = useState(false);
-  const { addToast, setSchemas, setSuggestedQuestions, setSuggestionsLoading, llmSettings } = useDataStore();
+  const { addToast, setSchemas, setDbReady, setSuggestedQuestions, setSuggestionsLoading, llmSettings } = useDataStore();
 
   const processFiles = useCallback(
     async (files: FileList | File[]) => {
       if (uploading) return;
       setUploading(true);
-      const db = await getDB();
-      let imported = 0;
+      let schemas = await getSchemas();
 
       for (const file of Array.from(files)) {
         try {
-          if (file.name.match(/\.(sqlite3|sqlite|db|s3db|sl3)$/i)) {
-            await db.uploadSQLite(file);
-            addToast({ variant: "success", title: "Imported", message: `SQLite DB: ${file.name}` });
-          } else if (file.name.match(/\.csv$/i)) {
-            const tableName = await db.uploadCSV(file, ",");
-            addToast({ variant: "success", title: "Imported", message: `Table: ${tableName}` });
-          } else if (file.name.match(/\.tsv$/i)) {
-            const tableName = await db.uploadCSV(file, "\t");
-            addToast({ variant: "success", title: "Imported", message: `Table: ${tableName}` });
-          } else {
-            addToast({ variant: "warning", title: "Skipped", message: `Unknown file type: ${file.name}` });
-            continue;
-          }
-          imported++;
+          schemas = await loadFile(file);
+          addToast({ variant: "success", title: "Imported", message: file.name });
         } catch (err) {
           addToast({ variant: "error", title: `Error: ${file.name}`, message: String(err) });
         }
       }
 
-      if (imported > 0) {
-        const schemas = db.schema().map((s) => ({
-          ...s,
-          rowCount: db.tableRowCount(s.name),
-          preview: db.tablePreview(s.name),
-        }));
+      if (schemas.length > 0) {
         setSchemas(schemas);
+        setDbReady(true);
         fetchSuggestions(schemas.map((s) => s.sql).join("\n\n"));
       }
       setUploading(false);
     },
-    [uploading, addToast, setSchemas, setSuggestedQuestions, llmSettings],
+    [uploading, addToast, setSchemas, setDbReady, setSuggestedQuestions, llmSettings],
   );
 
   async function fetchSuggestions(schemaSQL: string) {
     setSuggestionsLoading(true);
     try {
       const resp = await callLLMJSON<{ questions: string[] }>({
-        system: "Suggest 5 diverse, useful questions that a user can answer from this dataset using SQLite",
+        system: "Suggest 5 diverse, useful questions that a user can answer from this dataset using DuckDB SQL",
         user: schemaSQL,
         settings: llmSettings,
         schema: {
@@ -88,10 +71,7 @@ export function FileUpload() {
 
   return (
     <div
-      onDragOver={(e) => {
-        e.preventDefault();
-        setDragging(true);
-      }}
+      onDragOver={(e) => { e.preventDefault(); setDragging(true); }}
       onDragLeave={() => setDragging(false)}
       onDrop={onDrop}
       onClick={() => !uploading && inputRef.current?.click()}
@@ -101,7 +81,8 @@ export function FileUpload() {
         uploading && "pointer-events-none opacity-60",
       )}
     >
-      <input ref={inputRef} type="file" accept={ACCEPTED} multiple className="hidden" onChange={(e) => e.target.files && processFiles(e.target.files)} />
+      <input ref={inputRef} type="file" accept={ACCEPTED} multiple className="hidden"
+        onChange={(e) => e.target.files && processFiles(e.target.files)} />
 
       <div className="flex items-center gap-3 text-gray-400">
         <FileSpreadsheet size={28} />
@@ -113,7 +94,9 @@ export function FileUpload() {
         <p className="text-sm font-medium text-gray-700 dark:text-gray-300">
           {dragging ? "Drop files here" : "Upload your data"}
         </p>
-        <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">CSV, TSV, or SQLite (.db, .sqlite3) — drag & drop or click</p>
+        <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">
+          CSV, TSV, Excel, JSON, Parquet, SQLite — drag & drop or click
+        </p>
       </div>
 
       {uploading && (

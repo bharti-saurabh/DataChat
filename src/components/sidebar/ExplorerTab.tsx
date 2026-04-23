@@ -5,7 +5,7 @@ import {
   flexRender, type SortingState, getSortedRowModel,
 } from "@tanstack/react-table";
 import { useDataStore } from "@/store/useDataStore";
-import { getDB } from "@/lib/db";
+import { runQuery } from "@/lib/db";
 import { computeColumnStats } from "@/lib/explorerStats";
 import type { ColumnStats, QueryRow } from "@/types";
 
@@ -33,9 +33,8 @@ function TableExplorer({ tableName }: { tableName: string }) {
   const loadStats = useCallback(async () => {
     if (stats || !schema) return;
     setStats({ rows: [], columnStats: [], loading: true });
-    const db = await getDB();
-    const rows = db.exec(`SELECT * FROM ${JSON.stringify(tableName)}`, { rowMode: "object" }) as QueryRow[];
-    const columnStats = await computeColumnStats(db, tableName, schema.columns);
+    const rows = await runQuery(`SELECT * FROM "${tableName.replace(/"/g, '""')}"`);
+    const columnStats = await computeColumnStats(tableName, schema.columns);
     setStats({ rows, columnStats, loading: false });
   }, [stats, schema, tableName]);
 

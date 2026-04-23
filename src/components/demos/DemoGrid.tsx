@@ -2,14 +2,14 @@ import { useState, useEffect } from "react";
 import { ExternalLink, Loader2 } from "lucide-react";
 import type { DemoConfig } from "@/types";
 import { useDataStore } from "@/store/useDataStore";
-import { getDB } from "@/lib/db";
+import { loadFile } from "@/lib/db";
 import { callLLMJSON } from "@/lib/llm";
 import { cn } from "@/lib/utils";
 
 export function DemoGrid() {
   const [demos, setDemos] = useState<DemoConfig[]>([]);
   const [loadingDemo, setLoadingDemo] = useState<string | null>(null);
-  const { addToast, setSchemas, setContext, setSuggestedQuestions, setSuggestionsLoading, llmSettings } = useDataStore();
+  const { addToast, setSchemas, setDbReady, setContext, setSuggestedQuestions, setSuggestionsLoading, llmSettings } = useDataStore();
 
   useEffect(() => {
     fetch(`${import.meta.env.BASE_URL}config.json`)
@@ -25,20 +25,9 @@ export function DemoGrid() {
       const blob = await fetch(demo.file).then((r) => r.blob());
       const filename = demo.file.split("/").pop()!;
       const file = new File([blob], filename);
-      const db = await getDB();
-
-      if (filename.match(/\.(sqlite3|sqlite|db|s3db|sl3)$/i)) {
-        await db.uploadSQLite(file);
-      } else {
-        await db.uploadCSV(file, ",");
-      }
-
-      const schemas = db.schema().map((s) => ({
-        ...s,
-        rowCount: db.tableRowCount(s.name),
-        preview: db.tablePreview(s.name),
-      }));
+      const schemas = await loadFile(file);
       setSchemas(schemas);
+      setDbReady(true);
       setContext(demo.context ?? "");
 
       if (demo.questions?.length) {
@@ -46,7 +35,6 @@ export function DemoGrid() {
       } else {
         fetchSuggestions(schemas.map((s) => s.sql).join("\n\n"));
       }
-
       addToast({ variant: "success", title: `Loaded ${demo.title}` });
     } catch (err) {
       addToast({ variant: "error", title: "Failed to load demo", message: String(err) });
@@ -59,7 +47,7 @@ export function DemoGrid() {
     setSuggestionsLoading(true);
     try {
       const resp = await callLLMJSON<{ questions: string[] }>({
-        system: "Suggest 5 diverse, useful questions that a user can answer from this dataset using SQLite",
+        system: "Suggest 5 diverse, useful questions that a user can answer from this dataset using DuckDB SQL",
         user: schemaSQL,
         settings: llmSettings,
         schema: {

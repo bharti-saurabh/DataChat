@@ -12,7 +12,7 @@ export default defineConfig({
     },
   },
   optimizeDeps: {
-    exclude: ["@sqlite.org/sqlite-wasm"],
+    exclude: ["@duckdb/duckdb-wasm"],
   },
   build: {
     rollupOptions: {
@@ -20,7 +20,8 @@ export default defineConfig({
         manualChunks: (id: string) => {
           if (id.includes("monaco-editor") || id.includes("@monaco-editor")) return "monaco";
           if (id.includes("node_modules/xlsx")) return "xlsx";
-          if (id.includes("node_modules/chart.js")) return "chart";
+          if (id.includes("node_modules/recharts") || id.includes("node_modules/d3-")) return "recharts";
+          if (id.includes("node_modules/framer-motion")) return "framer";
           if (id.includes("node_modules/react/") || id.includes("node_modules/react-dom/")) return "react";
         },
       },
