@@ -1,9 +1,9 @@
 import { callLLMJSON } from "@/lib/llm";
-import type { LLMSettings, QueryRow } from "@/types";
+import type { ClarificationQuestion, LLMSettings, QueryRow } from "@/types";
 
 interface ClarificationResult {
   needsClarification: boolean;
-  questions: string[];
+  questions: ClarificationQuestion[];
 }
 
 interface FollowUpResult {
@@ -14,7 +14,19 @@ const CLARIFY_SCHEMA = {
   type: "object",
   properties: {
     needsClarification: { type: "boolean" },
-    questions: { type: "array", items: { type: "string" }, maxItems: 3 },
+    questions: {
+      type: "array",
+      maxItems: 3,
+      items: {
+        type: "object",
+        properties: {
+          question: { type: "string" },
+          options: { type: "array", items: { type: "string" }, minItems: 2, maxItems: 4 },
+        },
+        required: ["question", "options"],
+        additionalProperties: false,
+      },
+    },
   },
   required: ["needsClarification", "questions"],
   additionalProperties: false,
@@ -48,6 +60,8 @@ Only ask for clarification when it would meaningfully change the query output â€
 Do NOT ask for clarification on simple, unambiguous factual questions.
 Do NOT ask more than 3 questions.
 
+For each question you ask, provide 2-4 short, concrete answer options (2-5 words each). These are the most likely choices a user might pick. Do NOT include "Other" â€” that will be added automatically.
+
 ${context ? `Dataset context: ${context}` : ""}
 
 Schema:
@@ -57,7 +71,6 @@ ${schemaSQL}`,
       schema: CLARIFY_SCHEMA,
     });
   } catch {
-    // If clarification check fails, proceed without it
     return { needsClarification: false, questions: [] };
   }
 }

@@ -64,6 +64,11 @@ export interface SlideTextBlock {
 }
 
 // ── Chat (Analyst mode) ───────────────────────────────────────────────────────
+export interface ClarificationQuestion {
+  question: string;
+  options: string[];
+}
+
 export interface ChatMessage {
   id: string;
   role: "user" | "assistant" | "clarifying";
@@ -76,7 +81,7 @@ export interface ChatMessage {
   insightsLoading?: boolean;
   autoChartConfig?: ChartConfig;
   autoChartLoading?: boolean;
-  clarifyingQuestions?: string[];
+  clarifyingQuestions?: ClarificationQuestion[];
   suggestions?: string[];
   timestamp: number;
 }

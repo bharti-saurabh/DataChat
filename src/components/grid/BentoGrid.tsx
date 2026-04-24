@@ -50,7 +50,7 @@ export function BentoGrid() {
   }
 
   return (
-    <div ref={containerRef} className="flex-1 overflow-y-auto px-4 pt-2">
+    <div ref={containerRef} className="flex-1 min-h-0 overflow-y-auto px-4 pt-2">
       <ReactGridLayout
         className="layout"
         layout={layout as Layout}
