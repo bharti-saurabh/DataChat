@@ -5,7 +5,7 @@ const EXPLORER_FEATURES = [
   "AI builds your dashboard automatically from a prompt",
   "KPIs, charts, tables & insights — all in one view",
   "AI commentary per widget with conversational refinement",
-  "Supports CSV, Excel, JSON, Parquet — no database needed",
+  "Connect files, databases, and cloud sources in one place",
 ];
 
 const ANALYST_FEATURES = [
