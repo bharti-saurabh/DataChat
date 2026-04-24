@@ -2,7 +2,7 @@ import { useState, useEffect } from "react";
 import { ExternalLink, Loader2, SlidersHorizontal, ChevronDown } from "lucide-react";
 import type { DemoConfig } from "@/types";
 import { useDataStore } from "@/store/useDataStore";
-import { loadFile, getSchemas } from "@/lib/db";
+import { loadFile } from "@/lib/db";
 import { FileUpload } from "@/components/upload/FileUpload";
 import { cn } from "@/lib/utils";
 
