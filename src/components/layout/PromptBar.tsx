@@ -13,7 +13,7 @@ const EXAMPLE_PROMPTS = [
 ];
 
 export function PromptBar() {
-  const { schemas, llmSettings, isBuilding, setIsBuilding, setWidgets, setDashboardTitle, addToast, dbReady, widgets, updateWidget } = useDataStore();
+  const { schemas, llmSettings, isBuilding, setIsBuilding, setWidgets, setDashboardTitle, addToast, dbReady, widgets, updateWidget, explorerInstructions } = useDataStore();
   const [input, setInput] = useState("");
   const [focused, setFocused] = useState(false);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
@@ -24,7 +24,7 @@ export function PromptBar() {
     setInput("");
     setIsBuilding(true);
     try {
-      const { title, widgets: newWidgets } = await buildDashboard(q, schemas, llmSettings, widgets);
+      const { title, widgets: newWidgets } = await buildDashboard(q, schemas, llmSettings, widgets, explorerInstructions);
       setDashboardTitle(title);
       const finalWidgets = widgets.length === 0 ? newWidgets : [...widgets, ...newWidgets];
       setWidgets(finalWidgets);

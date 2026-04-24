@@ -41,6 +41,7 @@ interface DataState {
   savedDashboards: ExplorerDashboard[];
   editingWidgetId: string | null;
   dataSourceOpen: boolean;
+  explorerInstructions: string;
 
   // ── Shared UI ────────────────────────────────────────────────────────────────
   theme: Theme;
@@ -85,6 +86,7 @@ interface DataState {
   setEditingWidget: (id: string | null) => void;
   toggleDataSource: () => void;
   clearExplorerDashboard: () => void;
+  setExplorerInstructions: (s: string) => void;
 
   setTheme: (t: Theme) => void;
   toggleSidebar: () => void;
@@ -127,6 +129,7 @@ export const useDataStore = create<DataState>()(
     savedDashboards: [],
     editingWidgetId: null,
     dataSourceOpen: false,
+    explorerInstructions: "",
 
     theme: "auto",
     sidebarOpen: true,
@@ -189,6 +192,7 @@ export const useDataStore = create<DataState>()(
     setEditingWidget: (id) => set((s) => { s.editingWidgetId = id; }),
     toggleDataSource: () => set((s) => { s.dataSourceOpen = !s.dataSourceOpen; }),
     clearExplorerDashboard: () => set((s) => { s.widgets = []; s.dashboardTitle = ""; }),
+    setExplorerInstructions: (s_) => set((s) => { s.explorerInstructions = s_; }),
 
     setTheme: (t) => set((s) => { s.theme = t; }),
     toggleSidebar: () => set((s) => { s.sidebarOpen = !s.sidebarOpen; }),

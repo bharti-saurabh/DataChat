@@ -13,6 +13,7 @@ import { DataExplorerModal } from "@/components/explorer/DataExplorerModal";
 import { BentoGrid } from "@/components/grid/BentoGrid";
 import { PromptBar } from "@/components/layout/PromptBar";
 import { DataSourceModal } from "@/components/datasource/DataSourceModal";
+import { ExplorerLanding } from "@/components/layout/ExplorerLanding";
 import { useDataStore } from "@/store/useDataStore";
 import { getDB } from "@/lib/db";
 import { loadLLMSettings, saveLLMSettings } from "@/lib/persistence";
@@ -110,34 +111,24 @@ export default function App() {
       ) : (
         /* Explorer mode */
         <div className="relative flex-1 min-h-0 overflow-hidden bg-[var(--bg-base)]">
-          {/* Ambient orbs */}
+          {/* Ambient orbs — visible in both states */}
           <div className="pointer-events-none absolute inset-0 overflow-hidden">
             <div className="absolute -top-40 -left-40 w-[600px] h-[600px] rounded-full bg-indigo-500/10 blur-[120px]" />
             <div className="absolute -bottom-40 -right-40 w-[500px] h-[500px] rounded-full bg-violet-500/10 blur-[120px]" />
           </div>
 
-          {!hasData ? (
-            <div className="relative z-10 flex flex-col items-center justify-center h-full gap-6 p-8">
-              <div className="text-center space-y-2 mb-4">
-                <h1 className="text-4xl font-bold bg-gradient-to-r from-indigo-500 via-violet-500 to-pink-500 bg-clip-text text-transparent">
-                  DataChat Explorer
-                </h1>
-                <p className="text-[var(--text-2)] text-sm">
-                  Load a dataset to start building dashboards
-                </p>
-              </div>
-              <div className="w-full max-w-xl">
-                <FileUpload />
-              </div>
-            </div>
-          ) : (
-            <div className="relative z-10 flex flex-col h-full">
-              <div className="flex-1 min-h-0">
-                <BentoGrid />
-              </div>
-              <PromptBar />
-            </div>
-          )}
+          <div className="relative z-10 flex flex-col h-full">
+            {!hasData ? (
+              <ExplorerLanding />
+            ) : (
+              <>
+                <div className="flex-1 min-h-0">
+                  <BentoGrid />
+                </div>
+                <PromptBar />
+              </>
+            )}
+          </div>
 
           <DataSourceModal />
         </div>

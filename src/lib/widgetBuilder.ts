@@ -32,6 +32,7 @@ export async function buildDashboard(
   schemas: TableSchema[],
   settings: LLMSettings,
   existingWidgets: Widget[],
+  instructions?: string,
 ): Promise<{ title: string; widgets: Widget[] }> {
   const schemaText = schemas.map((s) =>
     `Table: ${s.name} (${s.rowCount?.toLocaleString() ?? "?"} rows)\nColumns: ${s.columns.map((c) => `${c.name} (${c.type})`).join(", ")}`
@@ -39,6 +40,10 @@ export async function buildDashboard(
 
   const existingContext = existingWidgets.length > 0
     ? `\nExisting dashboard widgets: ${existingWidgets.map((w) => w.title).join(", ")}. Add new widgets or suggest modifications.\n`
+    : "";
+
+  const instructionsBlock = instructions?.trim()
+    ? `\nGeneral instructions from the user (always follow these):\n${instructions.trim()}\n`
     : "";
 
   const system = `You are an expert data analyst and dashboard designer. Given a dataset schema and a user prompt, design a Bento Box dashboard with multiple widgets.
@@ -52,7 +57,7 @@ Rules:
 - Use DuckDB SQL syntax (window functions, CTEs, PIVOT all supported).
 - Generate 4–8 diverse widgets covering the prompt comprehensively.
 - Pack the grid left-to-right, row by row.
-${existingContext}
+${existingContext}${instructionsBlock}
 Dataset schema:
 ${schemaText}
 
