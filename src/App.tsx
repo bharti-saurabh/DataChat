@@ -1,6 +1,7 @@
-import { useEffect } from "react";
+import { useEffect, useState } from "react";
 import { Navbar } from "@/components/layout/Navbar";
 import { ToastProvider } from "@/components/layout/ToastProvider";
+import { RoleSelection } from "@/components/layout/RoleSelection";
 import { DemoGrid } from "@/components/demos/DemoGrid";
 import { FileUpload } from "@/components/upload/FileUpload";
 import { SidebarShell } from "@/components/sidebar/SidebarShell";
@@ -16,9 +17,11 @@ import { useDataStore } from "@/store/useDataStore";
 import { getDB } from "@/lib/db";
 import { loadLLMSettings, saveLLMSettings } from "@/lib/persistence";
 import { DEFAULT_LLM_SETTINGS } from "@/lib/llm";
+import type { AppMode } from "@/types";
 
 export default function App() {
-  const { theme, sidebarOpen, schemas, setDbReady, setLLMSettings, mode } = useDataStore();
+  const { theme, sidebarOpen, schemas, setDbReady, setLLMSettings, mode, setMode } = useDataStore();
+  const [roleSelected, setRoleSelected] = useState(false);
 
   // Apply theme
   useEffect(() => {
@@ -54,6 +57,21 @@ export default function App() {
 
   const hasData = schemas.length > 0;
 
+  const handleRoleSelect = (selectedMode: AppMode) => {
+    setMode(selectedMode);
+    setRoleSelected(true);
+  };
+
+  // Show role selection on first visit (no data, no role chosen yet)
+  if (!roleSelected && !hasData) {
+    return (
+      <div className="flex flex-col h-screen overflow-hidden">
+        <RoleSelection onSelect={handleRoleSelect} />
+        <ToastProvider />
+      </div>
+    );
+  }
+
   return (
     <div className="flex flex-col h-screen bg-gray-50 dark:bg-gray-950 text-gray-900 dark:text-gray-100 overflow-hidden">
       <Navbar />
@@ -74,7 +92,7 @@ export default function App() {
                 <div className="max-w-3xl mx-auto px-6 py-10 space-y-8">
                   <div className="text-center space-y-2">
                     <h1 className="text-4xl font-bold bg-gradient-to-r from-indigo-600 via-violet-600 to-pink-500 bg-clip-text text-transparent">
-                      DataChat
+                      DataChat Analyst
                     </h1>
                     <p className="text-gray-500 dark:text-gray-400">
                       Talk to your dataset in natural language
@@ -125,7 +143,7 @@ export default function App() {
         </div>
       )}
 
-      {/* Full-screen overlays (analyst mode) */}
+      {/* Full-screen overlays */}
       <Dashboard />
       <DataExplorerModal />
       <QueryHistory />
