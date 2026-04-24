@@ -1,7 +1,7 @@
 import { useState, useCallback } from "react";
 import {
   X, BarChart2, Loader2, Table2, Hash, Type, Sigma,
-  Calendar, ToggleLeft, ChevronRight, ArrowUpDown,
+  Calendar, ToggleLeft, ChevronRight, ArrowUpDown, Sparkles,
 } from "lucide-react";
 import {
   useReactTable, getCoreRowModel, getPaginationRowModel,
@@ -10,6 +10,7 @@ import {
 import { useDataStore } from "@/store/useDataStore";
 import { runQuery } from "@/lib/db";
 import { computeColumnStats } from "@/lib/explorerStats";
+import { generateColumnDescription } from "@/lib/schemaAI";
 import type { ColumnInfo, ColumnStats, QueryRow, TableSchema } from "@/types";
 import { cn } from "@/lib/utils";
 
@@ -174,10 +175,15 @@ function ColumnCard({ cs, colInfo }: { cs: ColumnStats; colInfo: ColumnInfo }) {
 
 // ── Table detail (right panel) ────────────────────────────────────────────────
 
+type Section = "profile" | "data" | "dictionary";
+
 function TableDetail({ tableName, schema }: { tableName: string; schema: TableSchema }) {
+  const { llmSettings } = useDataStore();
   const [stats, setStats] = useState<TableStats | null>(null);
-  const [activeSection, setActiveSection] = useState<"profile" | "data">("profile");
+  const [activeSection, setActiveSection] = useState<Section>("profile");
   const [sorting, setSorting] = useState<SortingState>([]);
+  const [generating, setGenerating] = useState<Set<string>>(new Set());
+  const [generatingAll, setGeneratingAll] = useState(false);
 
   const loadStats = useCallback(async () => {
     if (stats) return;
@@ -190,6 +196,47 @@ function TableDetail({ tableName, schema }: { tableName: string; schema: TableSc
   }, [stats, schema, tableName]);
 
   if (!stats) loadStats();
+
+  const updateDescription = useCallback((colName: string, desc: string) => {
+    setStats((prev) => prev ? {
+      ...prev,
+      columnStats: prev.columnStats.map((s) =>
+        s.columnName === colName ? { ...s, description: desc } : s
+      ),
+    } : prev);
+  }, []);
+
+  const generateOne = useCallback(async (colName: string) => {
+    if (!stats || generating.has(colName)) return;
+    const cs = stats.columnStats.find((s) => s.columnName === colName);
+    const colInfo = schema.columns.find((c) => c.name === colName);
+    if (!cs || !colInfo) return;
+    setGenerating((prev) => new Set(prev).add(colName));
+    try {
+      const desc = await generateColumnDescription(tableName, colInfo, cs, llmSettings);
+      updateDescription(colName, desc);
+    } finally {
+      setGenerating((prev) => { const n = new Set(prev); n.delete(colName); return n; });
+    }
+  }, [stats, generating, schema, tableName, llmSettings, updateDescription]);
+
+  const generateAll = useCallback(async () => {
+    if (!stats || generatingAll) return;
+    setGeneratingAll(true);
+    const pending = stats.columnStats.filter((cs) => !cs.description);
+    for (const cs of pending) {
+      const colInfo = schema.columns.find((c) => c.name === cs.columnName);
+      if (!colInfo) continue;
+      setGenerating((prev) => new Set(prev).add(cs.columnName));
+      try {
+        const desc = await generateColumnDescription(tableName, colInfo, cs, llmSettings);
+        updateDescription(cs.columnName, desc);
+      } finally {
+        setGenerating((prev) => { const n = new Set(prev); n.delete(cs.columnName); return n; });
+      }
+    }
+    setGeneratingAll(false);
+  }, [stats, generatingAll, schema, tableName, llmSettings, updateDescription]);
 
   const columns = schema.columns.map((col) => ({
     id: col.name,
@@ -218,6 +265,15 @@ function TableDetail({ tableName, schema }: { tableName: string; schema: TableSc
     initialState: { pagination: { pageSize: 25 } },
   });
 
+  const describedCount = stats?.columnStats.filter((cs) => cs.description).length ?? 0;
+  const totalCols = stats?.columnStats.length ?? 0;
+
+  const TABS: { key: Section; label: string }[] = [
+    { key: "profile",    label: "Column Profiles" },
+    { key: "data",       label: "Data Preview" },
+    { key: "dictionary", label: "Dictionary" },
+  ];
+
   return (
     <div className="flex flex-col h-full">
       {/* Table header */}
@@ -235,18 +291,44 @@ function TableDetail({ tableName, schema }: { tableName: string; schema: TableSc
       </div>
 
       {/* Tabs */}
-      <div className="flex border-b border-gray-200 dark:border-gray-700 shrink-0 px-6">
-        {(["profile", "data"] as const).map((s) => (
-          <button key={s} onClick={() => setActiveSection(s)}
-            className={cn(
-              "py-2.5 px-1 mr-5 text-xs font-medium border-b-2 -mb-px transition-colors",
-              activeSection === s
-                ? "border-indigo-500 text-indigo-600 dark:text-indigo-400"
-                : "border-transparent text-gray-400 hover:text-gray-600 dark:hover:text-gray-300"
-            )}>
-            {s === "profile" ? "Column Profiles" : "Data Preview"}
+      <div className="flex items-center border-b border-gray-200 dark:border-gray-700 shrink-0 px-6">
+        <div className="flex flex-1">
+          {TABS.map(({ key, label }) => (
+            <button key={key} onClick={() => setActiveSection(key)}
+              className={cn(
+                "py-2.5 px-1 mr-5 text-xs font-medium border-b-2 -mb-px transition-colors whitespace-nowrap",
+                activeSection === key
+                  ? "border-indigo-500 text-indigo-600 dark:text-indigo-400"
+                  : "border-transparent text-gray-400 hover:text-gray-600 dark:hover:text-gray-300"
+              )}>
+              {label}
+              {key === "dictionary" && totalCols > 0 && (
+                <span className={cn(
+                  "ml-1.5 text-[10px] px-1.5 py-0.5 rounded-full font-medium",
+                  describedCount === totalCols
+                    ? "bg-emerald-100 dark:bg-emerald-950 text-emerald-600 dark:text-emerald-400"
+                    : "bg-gray-100 dark:bg-gray-800 text-gray-400"
+                )}>
+                  {describedCount}/{totalCols}
+                </span>
+              )}
+            </button>
+          ))}
+        </div>
+
+        {/* Generate All button — only on dictionary tab */}
+        {activeSection === "dictionary" && !stats?.loading && describedCount < totalCols && (
+          <button
+            onClick={generateAll}
+            disabled={generatingAll}
+            className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium bg-indigo-50 dark:bg-indigo-950/50 text-indigo-600 dark:text-indigo-400 hover:bg-indigo-100 dark:hover:bg-indigo-950 transition-colors disabled:opacity-50 mb-px"
+          >
+            {generatingAll
+              ? <Loader2 size={11} className="animate-spin" />
+              : <Sparkles size={11} />}
+            Generate all
           </button>
-        ))}
+        )}
       </div>
 
       {/* Content */}
@@ -263,7 +345,7 @@ function TableDetail({ tableName, schema }: { tableName: string; schema: TableSc
               return <ColumnCard key={cs.columnName} cs={cs} colInfo={colInfo} />;
             })}
           </div>
-        ) : (
+        ) : activeSection === "data" ? (
           <div className="p-6">
             <div className="overflow-x-auto rounded-xl border border-gray-200 dark:border-gray-700">
               <table className="w-full text-xs">
@@ -309,6 +391,58 @@ function TableDetail({ tableName, schema }: { tableName: string; schema: TableSc
                 </div>
               </div>
             )}
+          </div>
+        ) : (
+          /* Dictionary tab */
+          <div className="divide-y divide-gray-100 dark:divide-gray-800">
+            {stats?.columnStats.map((cs) => {
+              const colInfo = schema.columns.find((c) => c.name === cs.columnName);
+              if (!colInfo) return null;
+              const isGenerating = generating.has(cs.columnName);
+              return (
+                <div key={cs.columnName} className="flex items-start gap-4 px-6 py-4 hover:bg-gray-50 dark:hover:bg-gray-900/40 transition-colors">
+                  {/* Left: type icon + name + type chip */}
+                  <div className="w-56 shrink-0">
+                    <div className="flex items-center gap-1.5 mb-0.5">
+                      {typeIcon(colInfo.type)}
+                      <span className="text-sm font-medium text-gray-800 dark:text-gray-100 truncate">{cs.columnName}</span>
+                    </div>
+                    <span className="text-[10px] font-mono text-gray-400 bg-gray-100 dark:bg-gray-800 px-1.5 py-0.5 rounded">
+                      {colInfo.type}
+                    </span>
+                  </div>
+
+                  {/* Right: description or generate button */}
+                  <div className="flex-1 min-w-0">
+                    {isGenerating ? (
+                      <div className="flex items-center gap-2 text-xs text-indigo-500">
+                        <Loader2 size={11} className="animate-spin" />
+                        Generating description…
+                      </div>
+                    ) : cs.description ? (
+                      <div className="group flex items-start gap-2">
+                        <p className="text-sm text-gray-700 dark:text-gray-300 leading-relaxed flex-1">{cs.description}</p>
+                        <button
+                          onClick={() => generateOne(cs.columnName)}
+                          title="Regenerate"
+                          className="shrink-0 opacity-0 group-hover:opacity-100 p-1 rounded text-gray-400 hover:text-indigo-500 hover:bg-indigo-50 dark:hover:bg-indigo-950 transition-all"
+                        >
+                          <Sparkles size={11} />
+                        </button>
+                      </div>
+                    ) : (
+                      <button
+                        onClick={() => generateOne(cs.columnName)}
+                        className="flex items-center gap-1.5 text-xs text-gray-400 hover:text-indigo-500 transition-colors"
+                      >
+                        <Sparkles size={11} />
+                        Generate description
+                      </button>
+                    )}
+                  </div>
+                </div>
+              );
+            })}
           </div>
         )}
       </div>
