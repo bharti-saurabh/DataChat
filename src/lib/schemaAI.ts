@@ -31,8 +31,8 @@ export async function generateColumnDescription(
   settings: LLMSettings,
 ): Promise<string> {
   const nullPct = stats.total > 0 ? Math.round((stats.nullCount / stats.total) * 100) : 0;
-  const topStr = stats.topValues?.length
-    ? `Top values: ${stats.topValues.slice(0, 5).join(", ")}`
+  const topStr = stats.topValueCounts?.length
+    ? `Top values: ${stats.topValueCounts.slice(0, 5).map((t) => t.value).join(", ")}`
     : "";
   const rangeStr =
     stats.min != null && stats.max != null

@@ -125,12 +125,12 @@ function ColumnRow({ col, stats, fk, onRequestDescription }: {
               {stats.avg != null && <Stat label="Avg" value={Number(stats.avg).toFixed(2)} />}
             </div>
           )}
-          {stats?.topValues && stats.topValues.length > 0 && (
+          {stats?.topValueCounts && stats.topValueCounts.length > 0 && (
             <div>
               <p className="text-[10px] text-gray-400 mb-1 font-medium uppercase tracking-wider">Top values</p>
               <div className="flex flex-wrap gap-1">
-                {stats.topValues.map((v) => (
-                  <span key={v} className="text-[10px] px-1.5 py-0.5 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded text-gray-600 dark:text-gray-400 font-mono max-w-[120px] truncate" title={v}>{v}</span>
+                {stats.topValueCounts.map(({ value }) => (
+                  <span key={value} className="text-[10px] px-1.5 py-0.5 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded text-gray-600 dark:text-gray-400 font-mono max-w-[120px] truncate" title={value}>{value}</span>
                 ))}
               </div>
             </div>
@@ -429,7 +429,7 @@ function ColumnsTab({
                     {stats.total > 0 && ` · ${stats.distinct.toLocaleString()} distinct value${stats.distinct !== 1 ? "s" : ""}`}
                     {stats.min != null && stats.max != null && `, range ${fmt(stats.min)}–${fmt(stats.max)}`}
                     {nullPct !== null && nullPct > 0 && `, ${nullPct}% missing`}
-                    {stats.topValues?.length ? ` · e.g. ${stats.topValues.slice(0, 3).join(", ")}` : ""}
+                    {stats.topValueCounts?.length ? ` · e.g. ${stats.topValueCounts.slice(0, 3).map((t) => t.value).join(", ")}` : ""}
                   </p>
                   <button onClick={() => handleGenerate(table.name, col, stats)}
                     disabled={loading}
