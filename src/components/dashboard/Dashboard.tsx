@@ -769,15 +769,35 @@ function replaceOklchInCSS(css: string): string {
   });
 }
 
-function injectOklchFallback(clonedDoc: Document) {
-  // Rewrite all inline <style> elements (Vite injects Tailwind this way in dev)
+async function injectOklchFallback(clonedDoc: Document) {
+  // 1. Rewrite inline <style> elements (Vite injects Tailwind this way in dev)
   clonedDoc.querySelectorAll("style").forEach((el) => {
     if (el.textContent) el.textContent = replaceOklchInCSS(el.textContent);
   });
-  // Also handle any remaining oklch in inline style attributes
+
+  // 2. In production, Tailwind is compiled into external .css files loaded via
+  //    <link rel="stylesheet">. html2canvas re-parses raw CSS and chokes on
+  //    oklch(). Fetch each linked stylesheet, replace oklch, and swap the
+  //    <link> for an inline <style> so html2canvas never sees raw oklch().
+  const links = Array.from(
+    clonedDoc.querySelectorAll<HTMLLinkElement>('link[rel="stylesheet"]')
+  );
+  await Promise.all(
+    links.map(async (link) => {
+      try {
+        const res = await fetch(link.href);
+        const css = await res.text();
+        const style = clonedDoc.createElement("style");
+        style.textContent = replaceOklchInCSS(css);
+        link.replaceWith(style);
+      } catch { /* leave original link if fetch fails */ }
+    })
+  );
+
+  // 3. Catch any oklch remaining in inline style attributes
   clonedDoc.querySelectorAll<HTMLElement>("[style]").forEach((el) => {
     const s = el.getAttribute("style");
-    if (s && s.includes("oklch")) el.setAttribute("style", replaceOklchInCSS(s));
+    if (s?.includes("oklch")) el.setAttribute("style", replaceOklchInCSS(s));
   });
 }
 
