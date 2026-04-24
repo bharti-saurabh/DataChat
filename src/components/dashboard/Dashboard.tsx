@@ -756,10 +756,11 @@ function oklchToHex(L: number, C: number, H: number): string {
 }
 
 function replaceOklchInCSS(css: string): string {
-  return css.replace(/oklch\(([^)]+)\)/gi, (_match, args) => {
-    // Handle optional alpha: "L C H / A"
+  // Handle oklch() including when args contain nested var() calls
+  // e.g., oklch(0.5 0.2 250 / var(--tw-opacity))
+  return css.replace(/oklch\(([^()]*(?:\([^()]*\)[^()]*)*)\)/gi, (_match, args) => {
     const [colorPart] = args.split("/");
-    const parts = colorPart.trim().split(/\s+/);
+    const parts = colorPart.trim().split(/\s+/).filter(Boolean);
     if (parts.length < 3) return "#808080";
     const L = parseFloat(parts[0]) / (parts[0].includes("%") ? 100 : 1);
     const C = parseFloat(parts[1]);
@@ -769,8 +770,11 @@ function replaceOklchInCSS(css: string): string {
   });
 }
 
+// Capture the main window's origin before html2canvas creates iframes
+const _mainOrigin = window.location.href;
+
 async function injectOklchFallback(clonedDoc: Document) {
-  // 1. Rewrite inline <style> elements (Vite injects Tailwind this way in dev)
+  // 1. Rewrite inline <style> elements
   clonedDoc.querySelectorAll("style").forEach((el) => {
     if (el.textContent) el.textContent = replaceOklchInCSS(el.textContent);
   });
@@ -779,13 +783,19 @@ async function injectOklchFallback(clonedDoc: Document) {
   //    <link rel="stylesheet">. html2canvas re-parses raw CSS and chokes on
   //    oklch(). Fetch each linked stylesheet, replace oklch, and swap the
   //    <link> for an inline <style> so html2canvas never sees raw oklch().
+  //    IMPORTANT: In the cloned iframe context, link.href may resolve relative
+  //    to about:blank. Use getAttribute + resolve from main window's origin.
   const links = Array.from(
     clonedDoc.querySelectorAll<HTMLLinkElement>('link[rel="stylesheet"]')
   );
   await Promise.all(
     links.map(async (link) => {
       try {
-        const res = await fetch(link.href);
+        const hrefAttr = link.getAttribute("href") ?? "";
+        if (!hrefAttr) return;
+        const absoluteUrl = new URL(hrefAttr, _mainOrigin).href;
+        const res = await fetch(absoluteUrl);
+        if (!res.ok) return;
         const css = await res.text();
         const style = clonedDoc.createElement("style");
         style.textContent = replaceOklchInCSS(css);
@@ -799,6 +809,44 @@ async function injectOklchFallback(clonedDoc: Document) {
     const s = el.getAttribute("style");
     if (s?.includes("oklch")) el.setAttribute("style", replaceOklchInCSS(s));
   });
+}
+
+// ── Pre-apply computed hex colors to live DOM before html2canvas capture ──────
+// html2canvas reads getComputedStyle() in the cloned iframe. Even after
+// replacing oklch in the cloned CSS, computed values can still return oklch.
+// Setting explicit inline hex styles before cloning ensures the clone inherits
+// them and html2canvas sees resolved hex values rather than oklch.
+
+const COLOR_PROPS = [
+  "color", "background-color",
+  "border-top-color", "border-right-color", "border-bottom-color", "border-left-color",
+  "outline-color",
+] as const;
+
+type SavedStyle = [HTMLElement, string, string, string];
+
+function preApplyHexColors(root: HTMLElement): SavedStyle[] {
+  const saved: SavedStyle[] = [];
+  const els: HTMLElement[] = [root, ...Array.from(root.querySelectorAll<HTMLElement>("*"))];
+  for (const el of els) {
+    const computed = window.getComputedStyle(el);
+    for (const prop of COLOR_PROPS) {
+      const val = computed.getPropertyValue(prop);
+      if (!val?.includes("oklch")) continue;
+      const hex = replaceOklchInCSS(val);
+      if (hex === val) continue;
+      saved.push([el, prop, el.style.getPropertyValue(prop), el.style.getPropertyPriority(prop)]);
+      el.style.setProperty(prop, hex, "important");
+    }
+  }
+  return saved;
+}
+
+function restoreHexColors(saved: SavedStyle[]) {
+  for (const [el, prop, orig, priority] of saved) {
+    el.style.removeProperty(prop);
+    if (orig) el.style.setProperty(prop, orig, priority);
+  }
 }
 
 // ── Dashboard ─────────────────────────────────────────────────────────────────
@@ -859,10 +907,14 @@ export function Dashboard() {
     if (!dashboardBlocks.length) { addToast({ variant: "warning", title: "Nothing to export" }); return; }
     setDocPdfExporting(true);
     await new Promise((r) => setTimeout(r, 1600)); // wait for Recharts to render
+    let saved: SavedStyle[] = [];
     try {
       const { default: html2canvas } = await import("html2canvas");
       const el = document.getElementById("doc-export-container");
       if (!el) throw new Error("Export container not found");
+
+      // Pre-apply hex inline styles so the clone inherits them (bypasses oklch parse)
+      saved = preApplyHexColors(el);
 
       // Capture full element including content below the fold
       const canvas = await html2canvas(el, {
@@ -876,10 +928,12 @@ export function Dashboard() {
         onclone: (_clonedDoc: Document) => injectOklchFallback(_clonedDoc),
       });
 
+      restoreHexColors(saved);
       const pages = sliceCanvasToPages(canvas, "portrait");
       setDocPdfExporting(false);
       setPdfPreview({ pages, type: "document" });
     } catch (e) {
+      restoreHexColors(saved);
       addToast({ variant: "error", title: "Export failed", message: String(e) });
       setDocPdfExporting(false);
     }
@@ -900,17 +954,24 @@ export function Dashboard() {
       for (let idx = 0; idx < slideEls.length; idx++) {
         setExportProgress(idx + 1);
         const el = slideEls[idx];
-        const canvas = await html2canvas(el, {
-          scale: 1.4,
-          useCORS: true,
-          allowTaint: true,
-          backgroundColor: "#ffffff",
-          logging: false,
-          width:  el.offsetWidth,
-          height: el.offsetHeight,
-          onclone: (_clonedDoc: Document) => injectOklchFallback(_clonedDoc),
-        });
-        pages.push(canvas.toDataURL("image/jpeg", 0.92));
+
+        // Pre-apply hex inline styles so the clone inherits them (bypasses oklch parse)
+        const saved = preApplyHexColors(el);
+        try {
+          const canvas = await html2canvas(el, {
+            scale: 1.4,
+            useCORS: true,
+            allowTaint: true,
+            backgroundColor: "#ffffff",
+            logging: false,
+            width:  el.offsetWidth,
+            height: el.offsetHeight,
+            onclone: (_clonedDoc: Document) => injectOklchFallback(_clonedDoc),
+          });
+          pages.push(canvas.toDataURL("image/jpeg", 0.92));
+        } finally {
+          restoreHexColors(saved);
+        }
         await new Promise((r) => setTimeout(r, 150));
       }
 
