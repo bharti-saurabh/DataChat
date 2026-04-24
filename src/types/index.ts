@@ -19,7 +19,8 @@ export interface ColumnStats {
   min?: unknown;
   max?: unknown;
   avg?: number;
-  topValues?: string[];
+  stddev?: number;
+  topValueCounts?: { value: string; count: number }[];
   description?: string;
 }
 

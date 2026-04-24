@@ -147,6 +147,17 @@ export function Navbar() {
         {/* Explorer actions */}
         {mode === "explorer" && (
           <>
+            {hasData && (
+              <button onClick={toggleExplorer} title="Data Explorer"
+                className={cn(
+                  "rounded-lg p-1.5 transition-colors",
+                  explorerOpen
+                    ? "bg-indigo-50 dark:bg-indigo-950 text-indigo-600"
+                    : "text-gray-500 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-800",
+                )}>
+                <Table2 size={17} />
+              </button>
+            )}
             <button onClick={toggleDataSource} title="Connect data"
               className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg text-gray-500 hover:text-gray-800 dark:hover:text-gray-200 hover:bg-gray-100 dark:hover:bg-gray-800 transition-all text-xs font-medium">
               <PlusCircle size={15} />

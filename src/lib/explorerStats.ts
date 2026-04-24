@@ -14,12 +14,17 @@ export async function computeColumnStats(
 
     try {
       const q = isNumeric
-        ? `SELECT COUNT(*) as total, COUNT(DISTINCT ${quoted}) as distinct_count,
-              SUM(CASE WHEN ${quoted} IS NULL THEN 1 ELSE 0 END) as null_count,
-              MIN(${quoted}) as min_val, MAX(${quoted}) as max_val, AVG(${quoted}) as avg_val
+        ? `SELECT COUNT(*) as total,
+                  COUNT(DISTINCT ${quoted}) as distinct_count,
+                  SUM(CASE WHEN ${quoted} IS NULL THEN 1 ELSE 0 END) as null_count,
+                  MIN(${quoted}) as min_val,
+                  MAX(${quoted}) as max_val,
+                  AVG(${quoted}) as avg_val,
+                  STDDEV(${quoted}) as stddev_val
            FROM ${tq}`
-        : `SELECT COUNT(*) as total, COUNT(DISTINCT ${quoted}) as distinct_count,
-              SUM(CASE WHEN ${quoted} IS NULL THEN 1 ELSE 0 END) as null_count
+        : `SELECT COUNT(*) as total,
+                  COUNT(DISTINCT ${quoted}) as distinct_count,
+                  SUM(CASE WHEN ${quoted} IS NULL THEN 1 ELSE 0 END) as null_count
            FROM ${tq}`;
 
       const rows = await runQuery(q);
@@ -28,7 +33,8 @@ export async function computeColumnStats(
       const distinct = Number(r.distinct_count ?? 0);
       const nullCount = Number(r.null_count ?? 0);
 
-      let topValues: string[] | undefined;
+      // Fetch top values with counts for categorical and low-cardinality numeric columns
+      let topValueCounts: { value: string; count: number }[] | undefined;
       const shouldFetchTop = !isNumeric || distinct <= 20;
       if (shouldFetchTop && total > 0) {
         try {
@@ -38,9 +44,11 @@ export async function computeColumnStats(
              WHERE ${quoted} IS NOT NULL
              GROUP BY ${quoted}
              ORDER BY cnt DESC
-             LIMIT 5`
+             LIMIT 8`
           );
-          topValues = tvRows.map((tv) => String(tv.val ?? "")).filter(Boolean);
+          topValueCounts = tvRows
+            .filter((tv) => tv.val !== null && tv.val !== undefined)
+            .map((tv) => ({ value: String(tv.val), count: Number(tv.cnt) }));
         } catch { /* ignore */ }
       }
 
@@ -51,8 +59,9 @@ export async function computeColumnStats(
         nullCount,
         min: isNumeric ? r.min_val : undefined,
         max: isNumeric ? r.max_val : undefined,
-        avg: isNumeric ? (r.avg_val != null ? Number(r.avg_val) : undefined) : undefined,
-        topValues,
+        avg: isNumeric && r.avg_val != null ? Number(r.avg_val) : undefined,
+        stddev: isNumeric && r.stddev_val != null ? Number(r.stddev_val) : undefined,
+        topValueCounts,
       });
     } catch {
       results.push({ columnName: col.name, total: 0, distinct: 0, nullCount: 0 });
