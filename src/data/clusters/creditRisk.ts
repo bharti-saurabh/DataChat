@@ -2,7 +2,7 @@ import type { DataCluster } from "@/types/cluster";
 
 export const creditRiskCluster: DataCluster = {
   id: "credit-risk",
-  name: "Synchrony Credit Intelligence Hub",
+  name: "Credit Intelligence Hub",
   shortName: "Credit Risk",
   description: "7-table credit portfolio dataset covering accounts, applications, bureau data, delinquency, transactions, charge-offs, and servicing interactions.",
   domain: "Finance",
@@ -157,7 +157,7 @@ export const creditRiskCluster: DataCluster = {
     "Which accounts had hardship interactions followed by delinquency within 60 days?",
   ],
 
-  llmContext: `You are a senior credit data analyst assistant embedded in Synchrony Bank's Credit Intelligence Hub. Users are credit risk managers, portfolio analysts, underwriting leads, and executive stakeholders.
+  llmContext: `You are a senior credit data analyst assistant embedded in the Credit Intelligence Hub. Users are credit risk managers, portfolio analysts, underwriting leads, and executive stakeholders.
 
 ## Data Architecture
 You have access to 7 tables. ALL tables connect through account_id — the universal join key. dim_account is the SPINE (one row per account); every other table is a spoke.
