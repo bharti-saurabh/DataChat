@@ -1,7 +1,8 @@
-import { useState, useCallback } from "react";
+import { useState, useCallback, useEffect } from "react";
 import {
   X, BarChart2, Loader2, Table2, Hash, Type, Sigma,
   Calendar, ToggleLeft, ChevronRight, ArrowUpDown, Sparkles,
+  GitFork, CheckCircle2, AlertTriangle, Clock,
 } from "lucide-react";
 import {
   useReactTable, getCoreRowModel, getPaginationRowModel,
@@ -11,7 +12,10 @@ import { useDataStore } from "@/store/useDataStore";
 import { runQuery } from "@/lib/db";
 import { computeColumnStats } from "@/lib/explorerStats";
 import { generateColumnDescription } from "@/lib/schemaAI";
+import { checkRefIntegrity, getDateRange } from "@/lib/clusterLoader";
+import { ERDiagram } from "@/components/cluster/ERDiagram";
 import type { ColumnInfo, ColumnStats, QueryRow, TableSchema } from "@/types";
+import type { ClusterRelationship } from "@/types/cluster";
 import { cn } from "@/lib/utils";
 
 interface TableStats {
@@ -452,7 +456,7 @@ function TableDetail({ tableName, schema }: { tableName: string; schema: TableSc
 
 // ── Left panel table row ──────────────────────────────────────────────────────
 
-function TableListItem({ schema, active, onClick }: { schema: TableSchema; active: boolean; onClick: () => void }) {
+function TableListItem({ schema, active, onClick, accentColor }: { schema: TableSchema; active: boolean; onClick: () => void; accentColor?: string }) {
   return (
     <button
       onClick={onClick}
@@ -464,7 +468,10 @@ function TableListItem({ schema, active, onClick }: { schema: TableSchema; activ
       )}
     >
       <div className="flex items-center gap-2 mb-0.5">
-        <Table2 size={12} className={active ? "text-indigo-500" : "text-gray-400"} />
+        {accentColor
+          ? <span className={`w-2 h-2 rounded-full shrink-0 ${accentColor}`} />
+          : <Table2 size={12} className={active ? "text-indigo-500" : "text-gray-400"} />
+        }
         <span className={cn(
           "text-sm font-medium truncate",
           active ? "text-indigo-600 dark:text-indigo-400" : "text-gray-700 dark:text-gray-300",
@@ -483,16 +490,214 @@ function TableListItem({ schema, active, onClick }: { schema: TableSchema; activ
   );
 }
 
+// ── Cluster view ─────────────────────────────────────────────────────────────
+
+interface RefResult { matched: number; total: number; pct: number }
+interface DateResult { min: string; max: string }
+
+function ClusterView({ onTableClick }: { onTableClick: (t: string) => void }) {
+  const { activeCluster, schemas } = useDataStore();
+
+  const [refResults, setRefResults] = useState<Record<string, RefResult>>({});
+  const [dateResults, setDateResults] = useState<Record<string, DateResult>>({});
+  const [refLoading, setRefLoading] = useState(false);
+  const [highlightTable, setHighlightTable] = useState<string | undefined>();
+  const clusterId = activeCluster?.id;
+
+  useEffect(() => {
+    if (!activeCluster) return;
+    setRefLoading(true);
+    setRefResults({});
+    setDateResults({});
+    Promise.all(
+      activeCluster.relationships.map(async (rel: ClusterRelationship) => {
+        const key = `${rel.fromTable}.${rel.fromColumn}`;
+        try {
+          const res = await checkRefIntegrity(rel.fromTable, rel.fromColumn, rel.toTable, rel.toColumn);
+          return [key, res] as [string, RefResult];
+        } catch { return [key, { matched: 0, total: 0, pct: 0 }] as [string, RefResult]; }
+      })
+    ).then((entries) => {
+      setRefResults(Object.fromEntries(entries));
+      setRefLoading(false);
+    });
+
+    activeCluster.tables.forEach(async (t) => {
+      const s = schemas.find((sc) => sc.name === t.id);
+      if (!s) return;
+      const dateCol = s.columns.find((c) =>
+        /date|time|timestamp/i.test(c.type) && /date|dt|_at|_on|month/i.test(c.name)
+      );
+      if (!dateCol) return;
+      const res = await getDateRange(t.id, dateCol.name);
+      if (res) setDateResults((prev) => ({ ...prev, [t.id]: res }));
+    });
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [clusterId]);
+
+  if (!activeCluster) return (
+    <div className="flex flex-col items-center justify-center h-full gap-3 text-gray-400">
+      <GitFork size={36} className="opacity-20" />
+      <p className="text-sm">No data cluster loaded</p>
+    </div>
+  );
+
+  const totalRows = activeCluster.tables.reduce((s, t) => s + t.estimatedRows, 0);
+
+  return (
+    <div className="h-full overflow-y-auto px-6 py-5 space-y-8">
+      {/* Header */}
+      <div>
+        <div className="flex items-center gap-3 mb-1">
+          <span className="text-3xl">{activeCluster.icon}</span>
+          <div>
+            <h2 className="text-xl font-bold text-gray-900 dark:text-gray-100">{activeCluster.name}</h2>
+            <div className="flex items-center gap-2 mt-0.5">
+              <span className="text-xs text-indigo-500 bg-indigo-50 dark:bg-indigo-950/50 px-2 py-0.5 rounded-full font-medium">{activeCluster.domain}</span>
+              {activeCluster.tags.map((tag) => (
+                <span key={tag} className="text-[10px] text-gray-400 border border-gray-200 dark:border-gray-700 px-1.5 py-0.5 rounded-full">{tag}</span>
+              ))}
+            </div>
+          </div>
+        </div>
+        <p className="text-sm text-gray-500 dark:text-gray-400 mt-2">{activeCluster.description}</p>
+        <div className="flex gap-4 mt-3 text-xs text-gray-500">
+          <span><span className="font-semibold text-gray-800 dark:text-gray-200">{activeCluster.tables.length}</span> tables</span>
+          <span><span className="font-semibold text-gray-800 dark:text-gray-200">{(totalRows / 1000).toFixed(0)}K+</span> estimated rows</span>
+          <span><span className="font-semibold text-gray-800 dark:text-gray-200">{activeCluster.relationships.length}</span> FK relationships</span>
+          <span>Spine: <span className="font-semibold text-indigo-600 dark:text-indigo-400">{activeCluster.tables.find(t => t.id === activeCluster.spineTable)?.displayName}</span></span>
+        </div>
+      </div>
+
+      {/* ER Diagram */}
+      <div>
+        <h3 className="text-sm font-semibold text-gray-700 dark:text-gray-300 mb-3 flex items-center gap-2">
+          <GitFork size={14} /> Entity Relationship Diagram
+        </h3>
+        <div className="rounded-2xl border border-gray-200 dark:border-gray-700 p-4 bg-gray-50 dark:bg-gray-900/50">
+          <ERDiagram
+            cluster={activeCluster}
+            highlightTable={highlightTable}
+            onTableClick={(id) => { setHighlightTable(id); onTableClick(id); }}
+          />
+        </div>
+      </div>
+
+      {/* Referential Integrity */}
+      <div>
+        <h3 className="text-sm font-semibold text-gray-700 dark:text-gray-300 mb-3 flex items-center gap-2">
+          <CheckCircle2 size={14} /> Referential Integrity
+          {refLoading && <Loader2 size={12} className="animate-spin text-gray-400 ml-1" />}
+        </h3>
+        <div className="space-y-2.5">
+          {activeCluster.relationships.map((rel) => {
+            const key = `${rel.fromTable}.${rel.fromColumn}`;
+            const res = refResults[key];
+            const fromTable = activeCluster.tables.find(t => t.id === rel.fromTable);
+            return (
+              <div key={key} className="flex items-center gap-3 rounded-xl border border-gray-200 dark:border-gray-700 px-4 py-3 bg-white dark:bg-gray-900">
+                <span className={`w-2.5 h-2.5 rounded-full shrink-0 ${fromTable?.color ?? "bg-gray-400"}`} />
+                <div className="flex-1 min-w-0">
+                  <p className="text-xs font-medium text-gray-700 dark:text-gray-300 truncate">
+                    <span className="font-mono">{rel.fromTable}</span>
+                    <span className="text-gray-400 mx-1">·</span>
+                    <span className="font-mono text-indigo-500">{rel.fromColumn}</span>
+                    <span className="text-gray-400 mx-1">→</span>
+                    <span className="font-mono">{rel.toTable}.{rel.toColumn}</span>
+                  </p>
+                  {res && (
+                    <div className="mt-1.5">
+                      <div className="flex items-center justify-between text-[10px] text-gray-400 mb-0.5">
+                        <span>{res.matched.toLocaleString()} / {res.total.toLocaleString()} matched</span>
+                        <span className={res.pct >= 99 ? "text-emerald-500 font-medium" : res.pct >= 90 ? "text-amber-500 font-medium" : "text-red-500 font-medium"}>
+                          {res.pct}%
+                        </span>
+                      </div>
+                      <div className="h-1.5 rounded-full bg-gray-100 dark:bg-gray-800 overflow-hidden">
+                        <div
+                          className={`h-full rounded-full ${res.pct >= 99 ? "bg-emerald-500" : res.pct >= 90 ? "bg-amber-400" : "bg-red-400"}`}
+                          style={{ width: `${res.pct}%` }}
+                        />
+                      </div>
+                    </div>
+                  )}
+                  {!res && !refLoading && <p className="text-[10px] text-gray-400 mt-0.5">—</p>}
+                </div>
+                {res && (res.pct >= 99
+                  ? <CheckCircle2 size={14} className="text-emerald-500 shrink-0" />
+                  : <AlertTriangle size={14} className="text-amber-400 shrink-0" />
+                )}
+              </div>
+            );
+          })}
+        </div>
+      </div>
+
+      {/* Table summaries */}
+      <div>
+        <h3 className="text-sm font-semibold text-gray-700 dark:text-gray-300 mb-3 flex items-center gap-2">
+          <Table2 size={14} /> Table Summaries
+        </h3>
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+          {activeCluster.tables.map((t) => {
+            const schema = schemas.find((s) => s.name === t.id);
+            const dr = dateResults[t.id];
+            return (
+              <button
+                key={t.id}
+                onClick={() => { setHighlightTable(t.id); onTableClick(t.id); }}
+                className="text-left rounded-xl border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-900 p-4 hover:border-indigo-300 dark:hover:border-indigo-700 transition-all hover:shadow-sm group"
+              >
+                <div className="flex items-center gap-2 mb-2">
+                  <span className={`w-2.5 h-2.5 rounded-full ${t.color}`} />
+                  <span className="text-sm font-semibold text-gray-800 dark:text-gray-200 group-hover:text-indigo-600 dark:group-hover:text-indigo-400 transition-colors">{t.displayName}</span>
+                  {t.id === activeCluster.spineTable && (
+                    <span className="text-[9px] font-bold text-indigo-500 bg-indigo-50 dark:bg-indigo-950/50 px-1.5 py-0.5 rounded-full">SPINE</span>
+                  )}
+                </div>
+                <p className="text-[11px] text-gray-400 leading-snug mb-2">{t.grain}</p>
+                <div className="flex flex-wrap gap-x-4 gap-y-1 text-[10px] text-gray-500">
+                  <span><span className="font-medium text-gray-700 dark:text-gray-300">{t.estimatedRows.toLocaleString()}</span> est. rows</span>
+                  {schema && <span><span className="font-medium text-gray-700 dark:text-gray-300">{schema.columns.length}</span> columns</span>}
+                  <span className="font-mono text-indigo-400">PK: {t.primaryKey}</span>
+                  {dr && (
+                    <span className="flex items-center gap-1">
+                      <Clock size={9} /> {dr.min} → {dr.max}
+                    </span>
+                  )}
+                </div>
+              </button>
+            );
+          })}
+        </div>
+      </div>
+    </div>
+  );
+}
+
 // ── Modal shell ───────────────────────────────────────────────────────────────
 
+type ExplorerView = "tables" | "cluster";
+
 export function DataExplorerModal() {
-  const { explorerOpen, toggleExplorer, schemas } = useDataStore();
+  const { explorerOpen, toggleExplorer, schemas, activeCluster } = useDataStore();
   const [selectedTable, setSelectedTable] = useState<string | null>(null);
+  const [view, setView] = useState<ExplorerView>(activeCluster ? "cluster" : "tables");
 
   const activeTable = selectedTable ?? schemas[0]?.name ?? null;
   const activeSchema = schemas.find((s) => s.name === activeTable);
 
+  // When cluster loads, default to cluster view
+  useEffect(() => {
+    if (activeCluster) setView("cluster");
+  }, [activeCluster?.id]);
+
   if (!explorerOpen) return null;
+
+  function handleClusterTableClick(tableId: string) {
+    setSelectedTable(tableId);
+    setView("tables");
+  }
 
   return (
     <div className="fixed inset-0 z-50 flex bg-white dark:bg-gray-950">
@@ -503,18 +708,46 @@ export function DataExplorerModal() {
           <span className="font-semibold text-sm text-gray-900 dark:text-gray-100">Data Explorer</span>
         </div>
 
+        {/* Top-level view tabs */}
+        <div className="flex border-b border-gray-200 dark:border-gray-800 shrink-0">
+          <button
+            onClick={() => setView("tables")}
+            className={cn("flex-1 py-2 text-xs font-medium transition-colors",
+              view === "tables"
+                ? "border-b-2 border-indigo-500 text-indigo-600 dark:text-indigo-400"
+                : "text-gray-500 hover:text-gray-700 dark:hover:text-gray-300"
+            )}>
+            Tables
+          </button>
+          {activeCluster && (
+            <button
+              onClick={() => setView("cluster")}
+              className={cn("flex-1 py-2 text-xs font-medium transition-colors",
+                view === "cluster"
+                  ? "border-b-2 border-indigo-500 text-indigo-600 dark:text-indigo-400"
+                  : "text-gray-500 hover:text-gray-700 dark:hover:text-gray-300"
+              )}>
+              {activeCluster.icon} Cluster
+            </button>
+          )}
+        </div>
+
         <div className="flex-1 overflow-y-auto">
           {schemas.length === 0 ? (
             <p className="text-xs text-gray-400 p-4">No tables loaded</p>
           ) : (
-            schemas.map((s) => (
-              <TableListItem
-                key={s.name}
-                schema={s}
-                active={activeTable === s.name}
-                onClick={() => setSelectedTable(s.name)}
-              />
-            ))
+            schemas.map((s) => {
+              const clusterTable = activeCluster?.tables.find((t) => t.id === s.name);
+              return (
+                <TableListItem
+                  key={s.name}
+                  schema={s}
+                  active={view === "tables" && activeTable === s.name}
+                  onClick={() => { setSelectedTable(s.name); setView("tables"); }}
+                  accentColor={clusterTable?.color}
+                />
+              );
+            })
           )}
         </div>
 
@@ -529,7 +762,7 @@ export function DataExplorerModal() {
         )}
       </aside>
 
-      {/* Right: table detail */}
+      {/* Right: content */}
       <main className="flex-1 min-w-0 flex flex-col">
         <div className="flex items-center justify-end px-4 py-3 border-b border-gray-200 dark:border-gray-800 shrink-0">
           <button onClick={toggleExplorer}
@@ -539,7 +772,9 @@ export function DataExplorerModal() {
         </div>
 
         <div className="flex-1 min-h-0">
-          {activeTable && activeSchema ? (
+          {view === "cluster" ? (
+            <ClusterView onTableClick={handleClusterTableClick} />
+          ) : activeTable && activeSchema ? (
             <TableDetail key={activeTable} tableName={activeTable} schema={activeSchema} />
           ) : (
             <div className="flex flex-col items-center justify-center h-full gap-3 text-gray-400">

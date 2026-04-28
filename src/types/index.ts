@@ -184,4 +184,6 @@ export interface Toast {
   message?: string;
 }
 
-export type SidebarTab = "schema" | "sessions";
+export type SidebarTab = "schema" | "sessions" | "cluster";
+
+export type { DataCluster, ClusterTable, ClusterRelationship, ClusterLoadProgress } from "./cluster";

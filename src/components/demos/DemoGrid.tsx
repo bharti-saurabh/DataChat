@@ -5,6 +5,7 @@ import { useDataStore } from "@/store/useDataStore";
 import { loadFile } from "@/lib/db";
 import { callLLMJSON } from "@/lib/llm";
 import { cn } from "@/lib/utils";
+import { ClusterSectionInner } from "@/components/cluster/ClusterCard";
 
 export function DemoGrid() {
   const [demos, setDemos] = useState<DemoConfig[]>([]);
@@ -74,32 +75,39 @@ export function DemoGrid() {
   }
 
   return (
-    <section className="py-6">
-      <h2 className="text-lg font-semibold text-gray-800 dark:text-gray-200 mb-4">Try a demo dataset</h2>
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
-        {demos.map((demo) => (
-          <button
-            key={demo.title}
-            onClick={() => loadDemo(demo)}
-            disabled={!!loadingDemo}
-            className={cn(
-              "group relative text-left rounded-xl border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-900 p-4 hover:border-blue-400 dark:hover:border-blue-500 hover:shadow-md transition-all",
-              loadingDemo === demo.title && "opacity-60 cursor-wait",
-            )}
-          >
-            {loadingDemo === demo.title && (
-              <div className="absolute inset-0 flex items-center justify-center bg-white/60 dark:bg-gray-900/60 rounded-xl">
-                <Loader2 size={20} className="animate-spin text-blue-600" />
+    <div className="space-y-8 py-6">
+      {/* Data Clusters */}
+      <ClusterSectionInner />
+
+      {/* Single-file demos */}
+      <section>
+        <h2 className="text-lg font-semibold text-gray-800 dark:text-gray-200 mb-1">Single-file demos</h2>
+        <p className="text-xs text-gray-400 mb-4">Quick-start with a single CSV dataset.</p>
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
+          {demos.map((demo) => (
+            <button
+              key={demo.title}
+              onClick={() => loadDemo(demo)}
+              disabled={!!loadingDemo}
+              className={cn(
+                "group relative text-left rounded-xl border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-900 p-4 hover:border-blue-400 dark:hover:border-blue-500 hover:shadow-md transition-all",
+                loadingDemo === demo.title && "opacity-60 cursor-wait",
+              )}
+            >
+              {loadingDemo === demo.title && (
+                <div className="absolute inset-0 flex items-center justify-center bg-white/60 dark:bg-gray-900/60 rounded-xl">
+                  <Loader2 size={20} className="animate-spin text-blue-600" />
+                </div>
+              )}
+              <div className="flex items-start justify-between gap-2">
+                <h3 className="font-medium text-gray-900 dark:text-gray-100 group-hover:text-blue-600 transition-colors">{demo.title}</h3>
+                <ExternalLink size={14} className="shrink-0 text-gray-400 mt-0.5" />
               </div>
-            )}
-            <div className="flex items-start justify-between gap-2">
-              <h3 className="font-medium text-gray-900 dark:text-gray-100 group-hover:text-blue-600 transition-colors">{demo.title}</h3>
-              <ExternalLink size={14} className="shrink-0 text-gray-400 mt-0.5" />
-            </div>
-            <p className="text-xs text-gray-500 dark:text-gray-400 mt-1 line-clamp-2">{demo.body}</p>
-          </button>
-        ))}
-      </div>
-    </section>
+              <p className="text-xs text-gray-500 dark:text-gray-400 mt-1 line-clamp-2">{demo.body}</p>
+            </button>
+          ))}
+        </div>
+      </section>
+    </div>
   );
 }

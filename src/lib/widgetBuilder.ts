@@ -33,6 +33,7 @@ export async function buildDashboard(
   settings: LLMSettings,
   existingWidgets: Widget[],
   instructions?: string,
+  llmContext?: string,
 ): Promise<{ title: string; widgets: Widget[] }> {
   const schemaText = schemas.map((s) =>
     `Table: ${s.name} (${s.rowCount?.toLocaleString() ?? "?"} rows)\nColumns: ${s.columns.map((c) => `${c.name} (${c.type})`).join(", ")}`
@@ -46,7 +47,12 @@ export async function buildDashboard(
     ? `\nGeneral instructions from the user (always follow these):\n${instructions.trim()}\n`
     : "";
 
+  const clusterBlock = llmContext?.trim()
+    ? `\nDomain context (follow all rules and definitions below):\n${llmContext.trim()}\n`
+    : "";
+
   const system = `You are an expert data analyst and dashboard designer. Given a dataset schema and a user prompt, design a Bento Box dashboard with multiple widgets.
+${clusterBlock}
 
 Rules:
 - Use a 12-column grid (x+w ≤ 12). Keep y values compact (0–8 range).

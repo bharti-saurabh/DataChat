@@ -1,21 +1,23 @@
 import { useDataStore } from "@/store/useDataStore";
 import { SchemaExplorer } from "@/components/schema/SchemaExplorer";
 import { SessionsTab } from "@/components/sidebar/SessionsTab";
+import { ClusterSidebarTab } from "@/components/cluster/ClusterSidebarTab";
 import { cn } from "@/lib/utils";
 import type { SidebarTab } from "@/types";
 
-const TABS: { id: SidebarTab; label: string }[] = [
-  { id: "schema",   label: "Schema"   },
-  { id: "sessions", label: "Sessions" },
-];
-
 export function SidebarShell() {
-  const { sidebarTab, setSidebarTab } = useDataStore();
+  const { sidebarTab, setSidebarTab, activeCluster } = useDataStore();
+
+  const tabs: { id: SidebarTab; label: string }[] = [
+    { id: "schema",   label: "Schema"   },
+    ...(activeCluster ? [{ id: "cluster" as SidebarTab, label: "Cluster" }] : []),
+    { id: "sessions", label: "Sessions" },
+  ];
 
   return (
     <div className="flex flex-col h-full">
       <div className="flex border-b border-gray-200 dark:border-gray-700 shrink-0">
-        {TABS.map((tab) => (
+        {tabs.map((tab) => (
           <button key={tab.id} onClick={() => setSidebarTab(tab.id)}
             className={cn(
               "flex-1 py-2.5 text-xs font-medium transition-colors",
@@ -30,6 +32,7 @@ export function SidebarShell() {
 
       <div className="flex-1 overflow-hidden">
         {sidebarTab === "schema"   && <SchemaExplorer />}
+        {sidebarTab === "cluster"  && <ClusterSidebarTab />}
         {sidebarTab === "sessions" && <SessionsTab />}
       </div>
     </div>

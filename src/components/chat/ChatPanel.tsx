@@ -16,7 +16,7 @@ export function ChatPanel() {
   const {
     messages, isQuerying, schemas, context, suggestedQuestions, suggestionsLoading,
     sessionId, sessionName, addMessage, updateMessage, setIsQuerying, addToast, llmSettings,
-    setSelectedMessageId,
+    setSelectedMessageId, activeCluster,
   } = useDataStore();
 
   const [input, setInput] = useState("");
@@ -78,9 +78,10 @@ export function ChatPanel() {
       })
       .join("\n\n");
 
+    const clusterContext = activeCluster?.llmContext ?? context;
     const systemPrompt = `You are an expert DuckDB query writer. The user has a dataset loaded in DuckDB.
 
-${context ? `Context about the dataset:\n${context}\n` : ""}
+${clusterContext ? `Context about the dataset:\n${clusterContext}\n` : ""}
 Schema:
 ${schemaSQL}
 

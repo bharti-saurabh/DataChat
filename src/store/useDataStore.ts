@@ -3,6 +3,7 @@ import { immer } from "zustand/middleware/immer";
 import type {
   AppMode, TableSchema, ChatMessage, LLMSettings, Toast,
   DashboardBlock, SidebarTab, Widget, ExplorerDashboard,
+  DataCluster, ClusterLoadProgress,
 } from "@/types";
 import { DEFAULT_LLM_SETTINGS } from "@/types";
 import { generateId } from "@/lib/utils";
@@ -53,6 +54,10 @@ interface DataState {
   explorerOpen: boolean;
   toasts: Toast[];
 
+  // ── Data clusters ─────────────────────────────────────────────────────────────
+  activeCluster: DataCluster | null;
+  clusterLoadProgress: ClusterLoadProgress | null;
+
   // ── LLM ──────────────────────────────────────────────────────────────────────
   llmSettings: LLMSettings;
 
@@ -96,6 +101,9 @@ interface DataState {
   toggleDashboard: () => void;
   toggleExplorer: () => void;
 
+  setActiveCluster: (c: DataCluster | null) => void;
+  setClusterLoadProgress: (p: ClusterLoadProgress | null) => void;
+
   setLLMSettings: (s: Partial<LLMSettings>) => void;
 
   addToast: (t: Omit<Toast, "id">) => void;
@@ -130,6 +138,9 @@ export const useDataStore = create<DataState>()(
     editingWidgetId: null,
     dataSourceOpen: false,
     explorerInstructions: "",
+
+    activeCluster: null,
+    clusterLoadProgress: null,
 
     theme: "auto",
     sidebarOpen: true,
@@ -201,6 +212,9 @@ export const useDataStore = create<DataState>()(
     toggleSettings: () => set((s) => { s.settingsOpen = !s.settingsOpen; }),
     toggleDashboard: () => set((s) => { s.dashboardOpen = !s.dashboardOpen; }),
     toggleExplorer: () => set((s) => { s.explorerOpen = !s.explorerOpen; }),
+
+    setActiveCluster: (c) => set((s) => { s.activeCluster = c as DataCluster; }),
+    setClusterLoadProgress: (p) => set((s) => { s.clusterLoadProgress = p; }),
 
     setLLMSettings: (partial) => set((s) => { Object.assign(s.llmSettings, partial); }),
 
