@@ -142,10 +142,28 @@ export function ERDiagram({ cluster, compact = false, onTableClick, highlightTab
                 markerEnd="url(#arrow)"
                 style={{ transition: "stroke 0.15s" }}
               />
-              {/* Hover tooltip */}
+              {/* Permanent join field label (full mode only) */}
+              {!compact && (
+                <g style={{ pointerEvents: "none" }}>
+                  <rect
+                    x={mid.x - 34} y={mid.y - 9}
+                    width={68} height={14} rx={3}
+                    fill="white" stroke="#e2e8f0" strokeWidth={0.5} opacity={0.93}
+                  />
+                  <text
+                    x={mid.x} y={mid.y + 2}
+                    textAnchor="middle" fontSize={7}
+                    fill="#6366f1" fontFamily="monospace" fontWeight="500"
+                  >
+                    {rel.fromColumn === rel.toColumn ? rel.fromColumn : `${rel.fromColumn}→${rel.toColumn}`}
+                  </text>
+                </g>
+              )}
+
+              {/* Hover tooltip (repositioned below label) */}
               {isHovered && !compact && (
                 <foreignObject
-                  x={mid.x - 70} y={mid.y - 28}
+                  x={mid.x - 70} y={mid.y + 8}
                   width={140} height={40}
                   style={{ pointerEvents: "none" }}
                 >

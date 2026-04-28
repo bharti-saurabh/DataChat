@@ -13,7 +13,7 @@ import { DataExplorerModal } from "@/components/explorer/DataExplorerModal";
 import { BentoGrid } from "@/components/grid/BentoGrid";
 import { PromptBar } from "@/components/layout/PromptBar";
 import { DataSourceModal } from "@/components/datasource/DataSourceModal";
-import { ExplorerLanding } from "@/components/layout/ExplorerLanding";
+import { ExplorerLanding, InstructionsPanel } from "@/components/layout/ExplorerLanding";
 import { useDataStore } from "@/store/useDataStore";
 import { getDB } from "@/lib/db";
 import { loadLLMSettings, saveLLMSettings } from "@/lib/persistence";
@@ -124,6 +124,9 @@ export default function App() {
               <>
                 <div className="flex-1 min-h-0 flex flex-col">
                   <BentoGrid />
+                </div>
+                <div className="px-4 pt-2 pb-0">
+                  <InstructionsPanel />
                 </div>
                 <PromptBar />
               </>

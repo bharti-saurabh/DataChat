@@ -77,7 +77,7 @@ function ExplorerDemoGrid() {
   );
 }
 
-function InstructionsPanel() {
+export function InstructionsPanel() {
   const { explorerInstructions, setExplorerInstructions } = useDataStore();
   const [open, setOpen] = useState(!!explorerInstructions);
 

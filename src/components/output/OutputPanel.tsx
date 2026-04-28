@@ -1,8 +1,9 @@
 import { useState, useCallback, useRef, useEffect } from "react";
 import {
   BarChart2, Table, Code2, LayoutDashboard, Download, Plus, Loader2,
-  Sparkles, ChevronDown, ChevronUp, Send, ChevronsUpDown,
+  Sparkles, ChevronDown, ChevronUp, Send, ChevronsUpDown, GitBranch,
 } from "lucide-react";
+import { SQLLineageDiagram } from "@/components/output/SQLLineageDiagram";
 import { useDataStore } from "@/store/useDataStore";
 import { RechartsDisplay, DEFAULT_PALETTE } from "@/components/output/RechartsDisplay";
 import { ResultsTable } from "@/components/results/ResultsTable";
@@ -17,12 +18,13 @@ import type { ChatMessage, ChartConfig, ChartType } from "@/types";
 
 const PythonIcon = () => <span className="text-[10px] font-bold font-mono text-yellow-500">Py</span>;
 
-type Tab = "visual" | "table" | "query";
+type Tab = "visual" | "table" | "query" | "lineage";
 
 const TAB_META: { id: Tab; icon: React.ReactNode; label: string }[] = [
-  { id: "visual", icon: <BarChart2 size={13} />, label: "Chart & Insights" },
-  { id: "table",  icon: <Table size={13} />,     label: "Table"            },
-  { id: "query",  icon: <Code2 size={13} />,     label: "SQL / Python"     },
+  { id: "visual",  icon: <BarChart2 size={13} />,   label: "Chart & Insights" },
+  { id: "table",   icon: <Table size={13} />,        label: "Table"            },
+  { id: "query",   icon: <Code2 size={13} />,        label: "SQL / Python"     },
+  { id: "lineage", icon: <GitBranch size={13} />,    label: "Lineage"          },
 ];
 
 const CHART_TYPES: { type: ChartType; label: string }[] = [
@@ -206,8 +208,9 @@ export function OutputPanel() {
   const hasVisual   = hasChart || hasInsights;
   const hasTable    = !!(msg?.result && msg.result.length > 0);
   const hasSql      = !!msg?.sql;
+  const hasLineage  = !!(msg?.sql && /\bJOIN\b/i.test(msg.sql));
 
-  const available: Record<Tab, boolean> = { visual: hasVisual, table: hasTable, query: hasSql };
+  const available: Record<Tab, boolean> = { visual: hasVisual, table: hasTable, query: hasSql, lineage: hasLineage };
   const currentTab = available[activeTab] ? activeTab : (TAB_META.find((t) => available[t.id])?.id ?? "visual");
 
   const msgId = msg?.id;
@@ -497,6 +500,11 @@ export function OutputPanel() {
               ? <ResultsTable data={msg.result} question={msg.question} />
               : <p className="text-sm text-gray-400 text-center py-8">No results</p>}
           </div>
+        )}
+
+        {/* ── Lineage tab ── */}
+        {currentTab === "lineage" && msg.sql && (
+          <SQLLineageDiagram sql={msg.sql} />
         )}
 
         {/* ── SQL / Python tab ── */}
