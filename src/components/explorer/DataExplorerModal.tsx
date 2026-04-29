@@ -2,7 +2,7 @@ import { useState, useCallback, useEffect } from "react";
 import {
   X, BarChart2, Loader2, Table2, Hash, Type, Sigma,
   Calendar, ToggleLeft, ChevronRight, ArrowUpDown, Sparkles,
-  GitFork, CheckCircle2, AlertTriangle, Clock,
+  GitFork, CheckCircle2, AlertTriangle, Clock, Shield, RefreshCw, Info,
 } from "lucide-react";
 import {
   useReactTable, getCoreRowModel, getPaginationRowModel,
@@ -13,8 +13,9 @@ import { runQuery } from "@/lib/db";
 import { computeColumnStats } from "@/lib/explorerStats";
 import { generateColumnDescription } from "@/lib/schemaAI";
 import { checkRefIntegrity, getDateRange } from "@/lib/clusterLoader";
+import { generateSchemaInsights } from "@/lib/schemaInsights";
 import { ERDiagram } from "@/components/cluster/ERDiagram";
-import type { ColumnInfo, ColumnStats, QueryRow, TableSchema } from "@/types";
+import type { ColumnInfo, ColumnStats, QueryRow, TableSchema, SchemaInsights } from "@/types";
 import type { ClusterRelationship } from "@/types/cluster";
 import { cn } from "@/lib/utils";
 
@@ -675,9 +676,263 @@ function ClusterView({ onTableClick }: { onTableClick: (t: string) => void }) {
   );
 }
 
+// ── AI Schema Insights view ───────────────────────────────────────────────────
+
+const PATTERN_META: Record<string, { label: string; cls: string }> = {
+  star_schema: { label: "Star Schema",         cls: "bg-indigo-100 dark:bg-indigo-950/50 text-indigo-700 dark:text-indigo-300" },
+  snowflake:   { label: "Snowflake",           cls: "bg-blue-100 dark:bg-blue-950/50 text-blue-700 dark:text-blue-300" },
+  flat:        { label: "Flat / Denormalized", cls: "bg-amber-100 dark:bg-amber-950/50 text-amber-700 dark:text-amber-300" },
+  mixed:       { label: "Mixed",               cls: "bg-violet-100 dark:bg-violet-950/50 text-violet-700 dark:text-violet-300" },
+  unknown:     { label: "Unknown",             cls: "bg-gray-100 dark:bg-gray-800 text-gray-600 dark:text-gray-400" },
+};
+
+const TABLE_TYPE_META: Record<string, { label: string; cls: string }> = {
+  fact:      { label: "Fact",      cls: "bg-indigo-100 dark:bg-indigo-950/50 text-indigo-700 dark:text-indigo-300 border border-indigo-200 dark:border-indigo-800" },
+  dimension: { label: "Dimension", cls: "bg-blue-100 dark:bg-blue-950/50 text-blue-700 dark:text-blue-300 border border-blue-200 dark:border-blue-800" },
+  lookup:    { label: "Lookup",    cls: "bg-emerald-100 dark:bg-emerald-950/50 text-emerald-700 dark:text-emerald-300 border border-emerald-200 dark:border-emerald-800" },
+  bridge:    { label: "Bridge",    cls: "bg-amber-100 dark:bg-amber-950/50 text-amber-700 dark:text-amber-300 border border-amber-200 dark:border-amber-800" },
+  unknown:   { label: "Unknown",   cls: "bg-gray-100 dark:bg-gray-800 text-gray-500 dark:text-gray-400 border border-gray-200 dark:border-gray-700" },
+};
+
+const CONFIDENCE_CLS: Record<string, string> = {
+  high:   "text-emerald-600 dark:text-emerald-400",
+  medium: "text-amber-600 dark:text-amber-400",
+  low:    "text-red-600 dark:text-red-400",
+};
+
+function SeverityIcon({ s }: { s: string }) {
+  if (s === "high")   return <AlertTriangle size={10} className="text-red-500 shrink-0 mt-0.5" />;
+  if (s === "medium") return <AlertTriangle size={10} className="text-amber-500 shrink-0 mt-0.5" />;
+  return <Info size={10} className="text-blue-400 shrink-0 mt-0.5" />;
+}
+
+function InsightsResults({ insights, onReanalyze, loading }: { insights: SchemaInsights; onReanalyze: () => void; loading: boolean }) {
+  const { tables, relationships, modelingRecommendations, architecturePattern, generatedAt } = insights;
+  const pm = PATTERN_META[architecturePattern] ?? PATTERN_META.unknown;
+
+  return (
+    <div className="h-full overflow-y-auto flex flex-col">
+      {/* Results header bar */}
+      <div className="px-6 py-3.5 border-b border-gray-200 dark:border-gray-700 flex items-center justify-between shrink-0">
+        <div className="flex items-center gap-2.5">
+          <Sparkles size={13} className="text-indigo-500" />
+          <span className="text-sm font-semibold text-gray-800 dark:text-gray-100">Schema Analysis</span>
+          <span className={cn("text-[11px] font-semibold px-2.5 py-0.5 rounded-full", pm.cls)}>{pm.label}</span>
+        </div>
+        <div className="flex items-center gap-3">
+          <span className="text-[10px] text-gray-400">
+            {new Date(generatedAt).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}
+          </span>
+          <button
+            onClick={onReanalyze}
+            disabled={loading}
+            className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium bg-gray-100 dark:bg-gray-800 text-gray-600 dark:text-gray-400 hover:bg-indigo-50 dark:hover:bg-indigo-950/50 hover:text-indigo-600 dark:hover:text-indigo-400 transition-colors disabled:opacity-40"
+          >
+            <RefreshCw size={10} className={loading ? "animate-spin" : ""} />
+            Re-analyze
+          </button>
+        </div>
+      </div>
+
+      <div className="flex-1 min-h-0 overflow-y-auto px-6 py-5 space-y-8">
+        {/* Table Intelligence */}
+        <section>
+          <h3 className="text-xs font-semibold uppercase tracking-wider text-gray-400 mb-3">
+            Table Intelligence · {tables.length} tables
+          </h3>
+          <div className="grid grid-cols-1 xl:grid-cols-2 gap-4">
+            {tables.map((t) => {
+              const tm = TABLE_TYPE_META[t.tableType] ?? TABLE_TYPE_META.unknown;
+              return (
+                <div key={t.name} className="rounded-xl border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-900 overflow-hidden">
+                  <div className="flex items-center gap-2 px-4 py-2.5 bg-gray-50 dark:bg-gray-800/60 border-b border-gray-100 dark:border-gray-700/60">
+                    <Table2 size={12} className="text-gray-400 shrink-0" />
+                    <span className="text-sm font-semibold text-gray-800 dark:text-gray-100 truncate flex-1">{t.name}</span>
+                    <span className={cn("text-[10px] font-bold px-2 py-0.5 rounded-full shrink-0", tm.cls)}>{tm.label}</span>
+                    <span className={cn("text-[10px] ml-1 shrink-0 font-medium", CONFIDENCE_CLS[t.typeConfidence])}>
+                      {t.typeConfidence}
+                    </span>
+                  </div>
+                  <div className="px-4 py-3 space-y-3">
+                    <p className="text-[11px] text-gray-500 dark:text-gray-400 leading-relaxed">{t.description}</p>
+
+                    {/* PK + PII badges */}
+                    <div className="flex flex-wrap gap-x-4 gap-y-1.5">
+                      {t.primaryKeyColumns.length > 0 && (
+                        <div className="flex items-center gap-1 flex-wrap">
+                          <span className="text-[9px] font-bold text-gray-400 uppercase tracking-wide">PK</span>
+                          {t.primaryKeyColumns.map((c) => (
+                            <span key={c} className="text-[10px] font-mono bg-indigo-50 dark:bg-indigo-950/40 text-indigo-600 dark:text-indigo-400 px-1.5 py-0.5 rounded">
+                              {c}
+                            </span>
+                          ))}
+                        </div>
+                      )}
+                      {t.piiColumns.length > 0 && (
+                        <div className="flex items-center gap-1 flex-wrap">
+                          <Shield size={10} className="text-red-500 shrink-0" />
+                          <span className="text-[9px] font-bold text-red-500 uppercase tracking-wide">PII</span>
+                          {t.piiColumns.map((c) => (
+                            <span key={c} className="text-[10px] font-mono bg-red-50 dark:bg-red-950/30 text-red-600 dark:text-red-400 px-1.5 py-0.5 rounded">
+                              {c}
+                            </span>
+                          ))}
+                        </div>
+                      )}
+                    </div>
+
+                    {/* Quality Issues */}
+                    {t.qualityIssues.length > 0 && (
+                      <div className="rounded-lg bg-amber-50 dark:bg-amber-950/20 border border-amber-100 dark:border-amber-900/40 px-3 py-2 space-y-1.5">
+                        {t.qualityIssues.map((qi, i) => (
+                          <div key={i} className="flex items-start gap-1.5 text-[11px]">
+                            <SeverityIcon s={qi.severity} />
+                            <span className="text-gray-400 font-mono shrink-0">{qi.column}:</span>
+                            <span className="text-gray-600 dark:text-gray-400">{qi.issue}</span>
+                          </div>
+                        ))}
+                      </div>
+                    )}
+
+                    {/* Recommendations */}
+                    {t.recommendations.length > 0 && (
+                      <div className="border-t border-gray-100 dark:border-gray-700/60 pt-2.5 space-y-1">
+                        {t.recommendations.map((r, i) => (
+                          <div key={i} className="flex items-start gap-1.5 text-[11px]">
+                            <span className="text-indigo-400 font-bold shrink-0 mt-px">›</span>
+                            <span className="text-gray-600 dark:text-gray-400">{r}</span>
+                          </div>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        </section>
+
+        {/* Detected Relationships */}
+        {relationships.length > 0 && (
+          <section>
+            <h3 className="text-xs font-semibold uppercase tracking-wider text-gray-400 mb-3 flex items-center gap-2">
+              <GitFork size={12} /> Detected Relationships · {relationships.length}
+            </h3>
+            <div className="space-y-2">
+              {relationships.map((rel, i) => (
+                <div key={i} className="flex items-start gap-3 px-4 py-3 rounded-xl border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-900">
+                  <div className="flex-1 min-w-0">
+                    <p className="text-xs font-medium text-gray-700 dark:text-gray-300 flex flex-wrap items-center gap-1">
+                      <span className="font-mono text-indigo-500">{rel.fromTable}.{rel.fromColumn}</span>
+                      <span className="text-gray-400">→</span>
+                      <span className="font-mono text-indigo-500">{rel.toTable}.{rel.toColumn}</span>
+                      <span className={cn(
+                        "text-[10px] px-1.5 py-0.5 rounded-full border",
+                        rel.confidence === "high"   ? "bg-emerald-50 dark:bg-emerald-950/30 text-emerald-600 dark:text-emerald-400 border-emerald-200 dark:border-emerald-800" :
+                        rel.confidence === "medium" ? "bg-amber-50 dark:bg-amber-950/30 text-amber-600 dark:text-amber-400 border-amber-200 dark:border-amber-800" :
+                                                      "bg-gray-50 dark:bg-gray-800 text-gray-500 border-gray-200 dark:border-gray-700"
+                      )}>
+                        {rel.type}
+                      </span>
+                    </p>
+                    <p className="text-[11px] text-gray-500 dark:text-gray-400 mt-1">{rel.description}</p>
+                  </div>
+                  <span className={cn("text-[10px] font-medium shrink-0", CONFIDENCE_CLS[rel.confidence])}>
+                    {rel.confidence}
+                  </span>
+                </div>
+              ))}
+            </div>
+          </section>
+        )}
+
+        {/* Global Modeling Recommendations */}
+        {modelingRecommendations.length > 0 && (
+          <section>
+            <h3 className="text-xs font-semibold uppercase tracking-wider text-gray-400 mb-3">
+              Global Modeling Recommendations
+            </h3>
+            <div className="rounded-xl border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-900 divide-y divide-gray-100 dark:divide-gray-800">
+              {modelingRecommendations.map((rec, i) => (
+                <div key={i} className="flex items-start gap-3 px-4 py-3.5">
+                  <span className="text-indigo-400 font-bold text-sm shrink-0 leading-tight">{i + 1}.</span>
+                  <p className="text-sm text-gray-600 dark:text-gray-400 leading-relaxed">{rec}</p>
+                </div>
+              ))}
+            </div>
+          </section>
+        )}
+      </div>
+    </div>
+  );
+}
+
+function InsightsView() {
+  const { schemas, llmSettings, schemaInsights, setSchemaInsights } = useDataStore();
+  const [loading, setLoading] = useState(false);
+  const [error, setError]     = useState<string | null>(null);
+
+  const analyze = async () => {
+    if (loading || schemas.length === 0) return;
+    setLoading(true);
+    setError(null);
+    try {
+      const insights = await generateSchemaInsights(schemas, llmSettings);
+      setSchemaInsights(insights);
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "Analysis failed. Check your LLM settings.");
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  if (loading) {
+    return (
+      <div className="flex flex-col items-center justify-center h-full gap-4 text-gray-400">
+        <Loader2 size={36} className="animate-spin text-indigo-400" />
+        <div className="text-center">
+          <p className="text-sm font-medium text-gray-600 dark:text-gray-300">Analyzing schema with AI…</p>
+          <p className="text-xs text-gray-400 mt-1">This may take 15–30 seconds</p>
+        </div>
+      </div>
+    );
+  }
+
+  if (schemaInsights) {
+    return <InsightsResults insights={schemaInsights} onReanalyze={analyze} loading={loading} />;
+  }
+
+  return (
+    <div className="flex flex-col items-center justify-center h-full gap-5 text-gray-400 px-10 text-center">
+      <div className="w-16 h-16 rounded-2xl bg-indigo-50 dark:bg-indigo-950/40 flex items-center justify-center">
+        <Sparkles size={28} className="text-indigo-400" />
+      </div>
+      <div>
+        <h3 className="text-base font-semibold text-gray-700 dark:text-gray-300 mb-1.5">AI Schema Intelligence</h3>
+        <p className="text-sm text-gray-500 leading-relaxed max-w-sm">
+          Detect table types, PII columns, data quality issues, relationships, and architecture patterns — powered by your LLM.
+        </p>
+      </div>
+      {error && (
+        <p className="text-xs text-red-500 bg-red-50 dark:bg-red-950/30 border border-red-200 dark:border-red-900/40 px-4 py-2 rounded-lg max-w-sm">
+          {error}
+        </p>
+      )}
+      <button
+        onClick={analyze}
+        disabled={schemas.length === 0}
+        className="flex items-center gap-2 px-5 py-2.5 rounded-xl bg-indigo-600 hover:bg-indigo-700 active:bg-indigo-800 text-white text-sm font-medium transition-colors disabled:opacity-40 disabled:cursor-not-allowed shadow-sm"
+      >
+        <Sparkles size={14} />
+        Analyze {schemas.length} Table{schemas.length !== 1 ? "s" : ""}
+      </button>
+    </div>
+  );
+}
+
 // ── Modal shell ───────────────────────────────────────────────────────────────
 
-type ExplorerView = "tables" | "cluster";
+type ExplorerView = "tables" | "cluster" | "insights";
 
 export function DataExplorerModal() {
   const { explorerOpen, toggleExplorer, schemas, activeCluster } = useDataStore();
@@ -709,27 +964,21 @@ export function DataExplorerModal() {
         </div>
 
         {/* Top-level view tabs */}
-        <div className="flex border-b border-gray-200 dark:border-gray-800 shrink-0">
-          <button
-            onClick={() => setView("tables")}
-            className={cn("flex-1 py-2 text-xs font-medium transition-colors",
-              view === "tables"
-                ? "border-b-2 border-indigo-500 text-indigo-600 dark:text-indigo-400"
-                : "text-gray-500 hover:text-gray-700 dark:hover:text-gray-300"
-            )}>
-            Tables
-          </button>
-          {activeCluster && (
+        <div className="flex border-b border-gray-200 dark:border-gray-800 shrink-0 overflow-x-auto">
+          {(["tables", ...(activeCluster ? ["cluster"] : []), "insights"] as ExplorerView[]).map((v) => (
             <button
-              onClick={() => setView("cluster")}
-              className={cn("flex-1 py-2 text-xs font-medium transition-colors",
-                view === "cluster"
+              key={v}
+              onClick={() => setView(v)}
+              className={cn("shrink-0 flex-1 py-2 px-1 text-xs font-medium transition-colors whitespace-nowrap",
+                view === v
                   ? "border-b-2 border-indigo-500 text-indigo-600 dark:text-indigo-400"
                   : "text-gray-500 hover:text-gray-700 dark:hover:text-gray-300"
               )}>
-              {activeCluster.icon} Cluster
+              {v === "tables"   ? "Tables" :
+               v === "cluster"  ? `${activeCluster!.icon} Cluster` :
+               "✦ AI Insights"}
             </button>
-          )}
+          ))}
         </div>
 
         <div className="flex-1 overflow-y-auto">
@@ -774,6 +1023,8 @@ export function DataExplorerModal() {
         <div className="flex-1 min-h-0">
           {view === "cluster" ? (
             <ClusterView onTableClick={handleClusterTableClick} />
+          ) : view === "insights" ? (
+            <InsightsView />
           ) : activeTable && activeSchema ? (
             <TableDetail key={activeTable} tableName={activeTable} schema={activeSchema} />
           ) : (

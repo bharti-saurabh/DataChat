@@ -187,3 +187,45 @@ export interface Toast {
 export type SidebarTab = "schema" | "sessions" | "cluster";
 
 export type { DataCluster, ClusterTable, ClusterRelationship, ClusterLoadProgress } from "./cluster";
+
+// ── AI Schema Insights ────────────────────────────────────────────────────────
+
+export type TableType = "fact" | "dimension" | "lookup" | "bridge" | "unknown";
+export type Confidence = "high" | "medium" | "low";
+
+export interface QualityIssue {
+  column: string;
+  issue: string;
+  severity: Confidence;
+}
+
+export interface RelationshipInsight {
+  fromTable: string;
+  fromColumn: string;
+  toTable: string;
+  toColumn: string;
+  type: "many-to-one" | "one-to-many" | "one-to-one" | "many-to-many";
+  confidence: Confidence;
+  description: string;
+}
+
+export interface TableInsight {
+  name: string;
+  tableType: TableType;
+  typeConfidence: Confidence;
+  description: string;
+  primaryKeyColumns: string[];
+  piiColumns: string[];
+  qualityIssues: QualityIssue[];
+  recommendations: string[];
+}
+
+export type ArchitecturePattern = "star_schema" | "snowflake" | "flat" | "mixed" | "unknown";
+
+export interface SchemaInsights {
+  tables: TableInsight[];
+  relationships: RelationshipInsight[];
+  modelingRecommendations: string[];
+  architecturePattern: ArchitecturePattern;
+  generatedAt: number;
+}

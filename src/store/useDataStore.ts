@@ -3,7 +3,7 @@ import { immer } from "zustand/middleware/immer";
 import type {
   AppMode, TableSchema, ChatMessage, LLMSettings, Toast,
   DashboardBlock, SidebarTab, Widget, ExplorerDashboard,
-  DataCluster, ClusterLoadProgress,
+  DataCluster, ClusterLoadProgress, SchemaInsights,
 } from "@/types";
 import { DEFAULT_LLM_SETTINGS } from "@/types";
 import { generateId } from "@/lib/utils";
@@ -58,6 +58,9 @@ interface DataState {
   activeCluster: DataCluster | null;
   clusterLoadProgress: ClusterLoadProgress | null;
 
+  // ── AI Schema Insights ────────────────────────────────────────────────────────
+  schemaInsights: SchemaInsights | null;
+
   // ── LLM ──────────────────────────────────────────────────────────────────────
   llmSettings: LLMSettings;
 
@@ -103,6 +106,7 @@ interface DataState {
 
   setActiveCluster: (c: DataCluster | null) => void;
   setClusterLoadProgress: (p: ClusterLoadProgress | null) => void;
+  setSchemaInsights: (insights: SchemaInsights | null) => void;
 
   setLLMSettings: (s: Partial<LLMSettings>) => void;
 
@@ -141,6 +145,7 @@ export const useDataStore = create<DataState>()(
 
     activeCluster: null,
     clusterLoadProgress: null,
+    schemaInsights: null,
 
     theme: "auto",
     sidebarOpen: true,
@@ -155,7 +160,7 @@ export const useDataStore = create<DataState>()(
 
     setMode: (mode) => set((s) => { s.mode = mode; }),
 
-    setSchemas: (schemas) => set((s) => { s.schemas = schemas; }),
+    setSchemas: (schemas) => set((s) => { s.schemas = schemas; s.schemaInsights = null; }),
     setDbReady: (ready) => set((s) => { s.dbReady = ready; }),
 
     setSuggestedQuestions: (qs) => set((s) => { s.suggestedQuestions = qs; }),
@@ -215,6 +220,7 @@ export const useDataStore = create<DataState>()(
 
     setActiveCluster: (c) => set((s) => { s.activeCluster = c as DataCluster; }),
     setClusterLoadProgress: (p) => set((s) => { s.clusterLoadProgress = p; }),
+    setSchemaInsights: (insights) => set((s) => { s.schemaInsights = insights as SchemaInsights; }),
 
     setLLMSettings: (partial) => set((s) => { Object.assign(s.llmSettings, partial); }),
 
