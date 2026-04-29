@@ -10,7 +10,7 @@ import { ClusterSectionInner } from "@/components/cluster/ClusterCard";
 export function DemoGrid() {
   const [demos, setDemos] = useState<DemoConfig[]>([]);
   const [loadingDemo, setLoadingDemo] = useState<string | null>(null);
-  const { addToast, setSchemas, setDbReady, setContext, setSuggestedQuestions, setSuggestionsLoading, llmSettings } = useDataStore();
+  const { addToast, setSchemas, setDbReady, setContext, setExplorerInstructions, setSuggestedQuestions, setSuggestionsLoading, llmSettings } = useDataStore();
 
   useEffect(() => {
     fetch(`${import.meta.env.BASE_URL}config.json`)
@@ -30,6 +30,7 @@ export function DemoGrid() {
       setSchemas(schemas);
       setDbReady(true);
       setContext(demo.context ?? "");
+      setExplorerInstructions(demo.dashboardContext ?? "");
 
       if (demo.questions?.length) {
         setSuggestedQuestions(demo.questions);

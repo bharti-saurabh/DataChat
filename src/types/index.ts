@@ -148,6 +148,7 @@ export interface DemoConfig {
   body: string;
   file: string;
   context?: string;
+  dashboardContext?: string;
   questions?: string[];
 }
 
