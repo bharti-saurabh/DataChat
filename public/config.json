@@ -17,7 +17,7 @@
     {
       "title": "Card Transactions",
       "body": "Card transactions for 2025 — analyze spend patterns, merchant categories, fraud flags, cross-border activity, and chargeback trends across 12,000 transactions.",
-      "file": "datasets/card-transactions/visa_transactions_2025.csv",
+      "file": "datasets/card-transactions/transactions_2025.csv",
       "questions": [
         "What is the approval rate by card product?",
         "Which merchant categories have the highest fraud rate?",
