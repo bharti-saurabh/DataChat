@@ -109,6 +109,7 @@ interface DataState {
 
   newSession: () => void;
   loadSession: (id: string, name: string, context: string, messages: ChatMessage[]) => void;
+  goHome: () => void;
 }
 
 export const useDataStore = create<DataState>()(
@@ -224,6 +225,22 @@ export const useDataStore = create<DataState>()(
       s.context = "";
       s.suggestedQuestions = [];
       s.selectedMessageId = undefined;
+    }),
+    goHome: () => set((s) => {
+      s.schemas = [];
+      s.schemaInsights = null;
+      s.messages = [];
+      s.suggestedQuestions = [];
+      s.context = "";
+      s.sessionId = generateId();
+      s.sessionName = "New session";
+      s.selectedMessageId = undefined;
+      s.widgets = [];
+      s.dashboardTitle = "";
+      s.explorerInstructions = "";
+      s.historyOpen = false;
+      s.dashboardOpen = false;
+      s.explorerOpen = false;
     }),
     loadSession: (id, name, context, messages) => set((s) => {
       s.sessionId = id;

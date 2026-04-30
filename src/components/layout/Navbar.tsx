@@ -1,4 +1,4 @@
-import { Database, History, Settings, PanelLeft, Sun, Moon, Monitor, LayoutDashboard, Table2, PlusCircle, Trash2 } from "lucide-react";
+import { Database, History, Settings, PanelLeft, Sun, Moon, Monitor, LayoutDashboard, Table2, PlusCircle, Trash2, Home } from "lucide-react";
 import { useDataStore, type Theme } from "@/store/useDataStore";
 import { cn } from "@/lib/utils";
 
@@ -15,7 +15,7 @@ export function Navbar() {
     toggleSidebar, toggleHistory, toggleSettings, toggleDashboard, toggleExplorer,
     historyOpen, settingsOpen, dashboardOpen, explorerOpen,
     sessionName, schemas,
-    dashboardTitle, widgets, toggleDataSource, clearExplorerDashboard,
+    dashboardTitle, widgets, toggleDataSource, clearExplorerDashboard, goHome,
   } = useDataStore();
 
   const hasData = schemas.length > 0;
@@ -33,10 +33,22 @@ export function Navbar() {
 
       {/* Logo + breadcrumb */}
       <div className="flex items-center gap-2">
-        <div className="w-7 h-7 rounded-lg bg-indigo-600 flex items-center justify-center shrink-0">
-          <Database size={14} className="text-white" />
-        </div>
-        <span className="font-semibold text-gray-900 dark:text-gray-100 text-sm">DataChat</span>
+        <button
+          onClick={hasData ? goHome : undefined}
+          disabled={!hasData}
+          title={hasData ? "Go home" : undefined}
+          className={cn(
+            "flex items-center gap-2 rounded-lg transition-colors",
+            hasData
+              ? "cursor-pointer hover:bg-gray-100 dark:hover:bg-gray-800 px-1.5 py-1 -mx-1.5 -my-1"
+              : "cursor-default",
+          )}
+        >
+          <div className="w-7 h-7 rounded-lg bg-indigo-600 flex items-center justify-center shrink-0">
+            {hasData ? <Home size={14} className="text-white" /> : <Database size={14} className="text-white" />}
+          </div>
+          <span className="font-semibold text-gray-900 dark:text-gray-100 text-sm">DataChat</span>
+        </button>
 
         {mode === "analyst" && sessionName && sessionName !== "New session" && (
           <>
