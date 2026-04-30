@@ -93,7 +93,11 @@ Answer following these steps:
 
 Replace generic filter values by querying a random value from the data.
 Always use "TableName"."ColumnName" notation.
-Always wrap the final SQL in a single \`\`\`sql ... \`\`\` code block. Do not put any other content inside code blocks.`;
+Always wrap the final SQL in a single \`\`\`sql ... \`\`\` code block. Do not put any other content inside code blocks.
+
+DuckDB-specific rules:
+- To ORDER BY an expression over a UNION ALL, wrap the union in a subquery: SELECT * FROM (...UNION ALL...) sub ORDER BY ...
+- Use CAST(NULL AS VARCHAR) instead of bare NULL in UNION ALL branches to avoid type inference errors.`;
 
     const assistantMsgId = generateId();
     addMessage({ id: assistantMsgId, role: "assistant", timestamp: Date.now() });
@@ -111,6 +115,23 @@ Always wrap the final SQL in a single \`\`\`sql ... \`\`\` code block. Do not pu
         result = await runQuery(sql);
       } catch (e) {
         error = String(e);
+        // Auto-retry: send the error back to the LLM to self-correct
+        try {
+          const fixContent = await callLLM({
+            system: systemPrompt,
+            user: `The SQL you wrote threw this error:\n\n${error}\n\nOriginal SQL:\n\`\`\`sql\n${sql}\n\`\`\`\n\nFix the SQL and return only the corrected query in a \`\`\`sql block.`,
+            settings: llmSettings,
+          });
+          const fixedSql = extractSQL(fixContent);
+          if (fixedSql && fixedSql !== sql) {
+            result = await runQuery(fixedSql);
+            error = undefined;
+            // Replace the displayed SQL with the corrected version
+            updateMessage(assistantMsgId, { sql: fixedSql });
+          }
+        } catch (e2) {
+          error = String(e2);
+        }
       }
 
       updateMessage(assistantMsgId, { content, sql, result, error });
