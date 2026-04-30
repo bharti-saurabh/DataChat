@@ -15,6 +15,18 @@
       ]
     },
     {
+      "title": "Card Transactions",
+      "body": "Visa card transactions for 2025 — analyze spend patterns, merchant categories, fraud flags, cross-border activity, and chargeback trends across 12,000 transactions.",
+      "file": "datasets/card-transactions/visa_transactions_2025.csv",
+      "questions": [
+        "What is the overall approval rate, and how does it vary by card product and POS entry mode?",
+        "Which merchant categories (MCC_DESCRIPTION) have the highest average transaction amount and the most transactions?",
+        "What percentage of transactions are flagged as fraud, and which card products or merchant categories have the highest fraud rates?",
+        "How do cross-border transactions compare to domestic ones in terms of approval rate, fraud rate, and average amount?",
+        "What are the top merchants by total transaction volume, and what is their chargeback rate?"
+      ]
+    },
+    {
       "title": "NBA",
       "body": "A database with information about basketball matches from the National Basketball Association. Lists Players, Teams, and matches with action counts for each player.",
       "file": "https://raw.githubusercontent.com/gramener/datasets/main/nba.db",
