@@ -1,16 +1,14 @@
 import { useDataStore } from "@/store/useDataStore";
 import { SchemaExplorer } from "@/components/schema/SchemaExplorer";
 import { SessionsTab } from "@/components/sidebar/SessionsTab";
-import { ClusterSidebarTab } from "@/components/cluster/ClusterSidebarTab";
 import { cn } from "@/lib/utils";
 import type { SidebarTab } from "@/types";
 
 export function SidebarShell() {
-  const { sidebarTab, setSidebarTab, activeCluster } = useDataStore();
+  const { sidebarTab, setSidebarTab } = useDataStore();
 
   const tabs: { id: SidebarTab; label: string }[] = [
     { id: "schema",   label: "Schema"   },
-    ...(activeCluster ? [{ id: "cluster" as SidebarTab, label: "Cluster" }] : []),
     { id: "sessions", label: "Sessions" },
   ];
 
@@ -32,7 +30,6 @@ export function SidebarShell() {
 
       <div className="flex-1 overflow-hidden">
         {sidebarTab === "schema"   && <SchemaExplorer />}
-        {sidebarTab === "cluster"  && <ClusterSidebarTab />}
         {sidebarTab === "sessions" && <SessionsTab />}
       </div>
     </div>

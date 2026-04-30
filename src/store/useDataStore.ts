@@ -3,7 +3,7 @@ import { immer } from "zustand/middleware/immer";
 import type {
   AppMode, TableSchema, ChatMessage, LLMSettings, Toast,
   DashboardBlock, SidebarTab, Widget, ExplorerDashboard,
-  DataCluster, ClusterLoadProgress, SchemaInsights,
+  SchemaInsights,
 } from "@/types";
 import { DEFAULT_LLM_SETTINGS } from "@/types";
 import { generateId } from "@/lib/utils";
@@ -54,10 +54,6 @@ interface DataState {
   explorerOpen: boolean;
   toasts: Toast[];
 
-  // ── Data clusters ─────────────────────────────────────────────────────────────
-  activeCluster: DataCluster | null;
-  clusterLoadProgress: ClusterLoadProgress | null;
-
   // ── AI Schema Insights ────────────────────────────────────────────────────────
   schemaInsights: SchemaInsights | null;
 
@@ -104,8 +100,6 @@ interface DataState {
   toggleDashboard: () => void;
   toggleExplorer: () => void;
 
-  setActiveCluster: (c: DataCluster | null) => void;
-  setClusterLoadProgress: (p: ClusterLoadProgress | null) => void;
   setSchemaInsights: (insights: SchemaInsights | null) => void;
 
   setLLMSettings: (s: Partial<LLMSettings>) => void;
@@ -143,8 +137,6 @@ export const useDataStore = create<DataState>()(
     dataSourceOpen: false,
     explorerInstructions: "",
 
-    activeCluster: null,
-    clusterLoadProgress: null,
     schemaInsights: null,
 
     theme: "auto",
@@ -218,8 +210,6 @@ export const useDataStore = create<DataState>()(
     toggleDashboard: () => set((s) => { s.dashboardOpen = !s.dashboardOpen; }),
     toggleExplorer: () => set((s) => { s.explorerOpen = !s.explorerOpen; }),
 
-    setActiveCluster: (c) => set((s) => { s.activeCluster = c as DataCluster; }),
-    setClusterLoadProgress: (p) => set((s) => { s.clusterLoadProgress = p; }),
     setSchemaInsights: (insights) => set((s) => { s.schemaInsights = insights as SchemaInsights; }),
 
     setLLMSettings: (partial) => set((s) => { Object.assign(s.llmSettings, partial); }),

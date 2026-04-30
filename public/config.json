@@ -52,18 +52,6 @@
       ]
     },
     {
-      "title": "Card Transactions",
-      "body": "Card transactions data with details on issuer country, transaction amount, and other details.",
-      "file": "https://raw.githubusercontent.com/gramener/datasets/main/card_transactions.csv",
-      "questions": [
-        "What is the total amount of transactions for each issuer country?",
-        "How many transactions were declined, and what are the most common decline reason codes?",
-        "What percentage of transactions were flagged as fraud, and how does this vary by industry segment?",
-        "Which channel has the highest number of successful transactions, and what is the average transaction amount for that channel?",
-        "What is the distribution of transaction types (e.g., purchase, refund) across different issuer regions?"
-      ]
-    },
-    {
       "title": "HR: Employee Data",
       "body": "Employee master data with demographics, job details, hierarchy, salary, performance, and other details.",
       "file": "https://raw.githubusercontent.com/gramener/datasets/main/employee_data.csv",

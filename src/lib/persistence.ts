@@ -1,5 +1,11 @@
 import Dexie, { type Table } from "dexie";
-import type { ChatMessage, LLMSettings, ExplorerDashboard } from "@/types";
+import type { ChatMessage, LLMSettings, ExplorerDashboard, ColumnStats } from "@/types";
+
+export interface SchemaCacheEntry {
+  key: string;
+  columnStats: Record<string, ColumnStats[]>;
+  cachedAt: number;
+}
 
 export interface SavedSession {
   id: string;
@@ -26,6 +32,7 @@ class DataChatDB extends Dexie {
   queryHistory!: Table<QueryHistoryItem, string>;
   settings!: Table<{ key: string; value: unknown }, string>;
   explorerDashboards!: Table<ExplorerDashboard, string>;
+  schemaCache!: Table<SchemaCacheEntry, string>;
 
   constructor() {
     super("datachat");
@@ -39,6 +46,13 @@ class DataChatDB extends Dexie {
       queryHistory: "id, sessionId, timestamp, pinned",
       settings: "key",
       explorerDashboards: "id, updatedAt",
+    });
+    this.version(4).stores({
+      sessions: "id, name, createdAt, updatedAt, messageCount",
+      queryHistory: "id, sessionId, timestamp, pinned",
+      settings: "key",
+      explorerDashboards: "id, updatedAt",
+      schemaCache: "key, cachedAt",
     });
   }
 }

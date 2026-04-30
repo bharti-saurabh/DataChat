@@ -22,6 +22,36 @@ export async function getDB(): Promise<{ db: duckdb.AsyncDuckDB; conn: duckdb.As
   return { db: dbInstance, conn: connInstance };
 }
 
+async function coerceDateColumns(tableName: string, conn: duckdb.AsyncDuckDBConnection) {
+  const describe = await conn.query(`DESCRIBE "${tableName}"`);
+  const varcharCols = describe.toArray()
+    .map((r) => { const rr = r as Record<string, unknown>; return { name: rr.column_name as string, type: rr.column_type as string }; })
+    .filter((c) => c.type === "VARCHAR");
+  if (!varcharCols.length) return;
+
+  const countRes = await conn.query(`SELECT COUNT(*) AS n FROM "${tableName}"`);
+  const total = Number((countRes.toArray()[0] as Record<string, unknown>).n);
+  if (total === 0) return;
+
+  for (const col of varcharCols) {
+    const q = col.name.replace(/"/g, '""');
+    try {
+      const r = await conn.query(
+        `SELECT COUNT(*) FILTER (WHERE TRY_CAST("${q}" AS DATE) IS NOT NULL) AS date_ok, ` +
+        `COUNT("${q}") AS non_null FROM "${tableName}"`
+      );
+      const row = r.toArray()[0] as Record<string, unknown>;
+      const dateOk = Number(row.date_ok);
+      const nonNull = Number(row.non_null);
+      if (nonNull > 0 && dateOk / nonNull > 0.9) {
+        await conn.query(
+          `ALTER TABLE "${tableName}" ALTER "${q}" TYPE DATE USING TRY_CAST("${q}" AS DATE)`
+        );
+      }
+    } catch { /* column can't be cast — skip */ }
+  }
+}
+
 export async function loadFile(file: File): Promise<TableSchema[]> {
   const { db, conn } = await getDB();
   const name = file.name.replace(/[^a-zA-Z0-9_]/g, "_").replace(/^_+/, "t_");
@@ -29,7 +59,10 @@ export async function loadFile(file: File): Promise<TableSchema[]> {
   if (/\.(csv|tsv|txt)$/i.test(file.name)) {
     await db.registerFileHandle(file.name, file, duckdb.DuckDBDataProtocol.BROWSER_FILEREADER, true);
     const sep = /\.tsv$/i.test(file.name) ? "\\t" : ",";
-    await conn.query(`CREATE OR REPLACE TABLE "${name}" AS SELECT * FROM read_csv_auto('${file.name}', sep='${sep}', header=true)`);
+    await conn.query(
+      `CREATE OR REPLACE TABLE "${name}" AS SELECT * FROM read_csv_auto('${file.name}', sep='${sep}', header=true, sample_size=-1)`
+    );
+    await coerceDateColumns(name, conn);
   } else if (/\.(xlsx|xls)$/i.test(file.name)) {
     const buf = await file.arrayBuffer();
     const wb = XLSX.read(buf);
@@ -38,7 +71,8 @@ export async function loadFile(file: File): Promise<TableSchema[]> {
       const csvFile = new File([csv], `${sheetName}.csv`);
       const tname = sheetName.replace(/[^a-zA-Z0-9_]/g, "_");
       await db.registerFileHandle(`${sheetName}.csv`, csvFile, duckdb.DuckDBDataProtocol.BROWSER_FILEREADER, true);
-      await conn.query(`CREATE OR REPLACE TABLE "${tname}" AS SELECT * FROM read_csv_auto('${sheetName}.csv', header=true)`);
+      await conn.query(`CREATE OR REPLACE TABLE "${tname}" AS SELECT * FROM read_csv_auto('${sheetName}.csv', header=true, sample_size=-1)`);
+      await coerceDateColumns(tname, conn);
     }
   } else if (/\.json$/i.test(file.name)) {
     await db.registerFileHandle(file.name, file, duckdb.DuckDBDataProtocol.BROWSER_FILEREADER, true);
@@ -68,7 +102,8 @@ export async function loadURL(url: string, tableName: string): Promise<TableSche
   } else if (url.endsWith(".json")) {
     await conn.query(`CREATE OR REPLACE TABLE "${safe}" AS SELECT * FROM read_json_auto('${url}')`);
   } else {
-    await conn.query(`CREATE OR REPLACE TABLE "${safe}" AS SELECT * FROM read_csv_auto('${url}', header=true)`);
+    await conn.query(`CREATE OR REPLACE TABLE "${safe}" AS SELECT * FROM read_csv_auto('${url}', header=true, sample_size=-1)`);
+    await coerceDateColumns(safe, conn);
   }
   return getSchemas();
 }
@@ -130,6 +165,7 @@ export async function pasteData(text: string, tableName: string): Promise<TableS
   const csvFile = new File([text], `${tableName}.csv`);
   await db.registerFileHandle(`${tableName}.csv`, csvFile, duckdb.DuckDBDataProtocol.BROWSER_FILEREADER, true);
   const safe = tableName.replace(/[^a-zA-Z0-9_]/g, "_");
-  await conn.query(`CREATE OR REPLACE TABLE "${safe}" AS SELECT * FROM read_csv_auto('${tableName}.csv', header=true)`);
+  await conn.query(`CREATE OR REPLACE TABLE "${safe}" AS SELECT * FROM read_csv_auto('${tableName}.csv', header=true, sample_size=-1)`);
+  await coerceDateColumns(safe, conn);
   return getSchemas();
 }

@@ -4,8 +4,8 @@ import type { DemoConfig } from "@/types";
 import { useDataStore } from "@/store/useDataStore";
 import { loadFile } from "@/lib/db";
 import { callLLMJSON } from "@/lib/llm";
+import { autoAnalyze } from "@/lib/autoAnalyze";
 import { cn } from "@/lib/utils";
-import { ClusterSectionInner } from "@/components/cluster/ClusterCard";
 
 export function DemoGrid() {
   const [demos, setDemos] = useState<DemoConfig[]>([]);
@@ -38,6 +38,7 @@ export function DemoGrid() {
         fetchSuggestions(schemas.map((s) => s.sql).join("\n\n"));
       }
       addToast({ variant: "success", title: `Loaded ${demo.title}` });
+      autoAnalyze(schemas, setSchemas).then(setSchemas).catch(() => {});
     } catch (err) {
       addToast({ variant: "error", title: "Failed to load demo", message: String(err) });
     } finally {
@@ -77,13 +78,9 @@ export function DemoGrid() {
 
   return (
     <div className="space-y-8 py-6">
-      {/* Data Clusters */}
-      <ClusterSectionInner />
-
-      {/* Single-file demos */}
       <section>
-        <h2 className="text-lg font-semibold text-gray-800 dark:text-gray-200 mb-1">Single-file demos</h2>
-        <p className="text-xs text-gray-400 mb-4">Quick-start with a single CSV dataset.</p>
+        <h2 className="text-lg font-semibold text-gray-800 dark:text-gray-200 mb-1">Sample datasets</h2>
+        <p className="text-xs text-gray-400 mb-4">Quick-start with a preloaded dataset.</p>
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
           {demos.map((demo) => (
             <button

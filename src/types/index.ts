@@ -185,9 +185,7 @@ export interface Toast {
   message?: string;
 }
 
-export type SidebarTab = "schema" | "sessions" | "cluster";
-
-export type { DataCluster, ClusterTable, ClusterRelationship, ClusterLoadProgress } from "./cluster";
+export type SidebarTab = "schema" | "sessions";
 
 // ── AI Schema Insights ────────────────────────────────────────────────────────
 

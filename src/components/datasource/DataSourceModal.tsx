@@ -3,6 +3,7 @@ import { motion, AnimatePresence } from "framer-motion";
 import { X, Upload, Link2, ClipboardPaste, FileText, Database, CheckCircle, Layers, Loader2 } from "lucide-react";
 import { useDataStore } from "@/store/useDataStore";
 import { loadFile, loadURL, pasteData } from "@/lib/db";
+import { autoAnalyze } from "@/lib/autoAnalyze";
 import { cn } from "@/lib/utils";
 
 type Tab = "upload" | "url" | "paste" | "samples";
@@ -37,6 +38,7 @@ export function DataSourceModal() {
       setDbReady(true);
       setLoaded(true);
       addToast({ variant: "success", title: `Loaded ${file.name}`, message: `${schemas.length} table(s) ready` });
+      autoAnalyze(schemas, setSchemas).then(setSchemas).catch(() => {});
       setTimeout(() => { setLoaded(false); toggleDataSource(); }, 800);
     } catch (e) {
       addToast({ variant: "error", title: "Failed to load file", message: String(e) });
@@ -61,6 +63,7 @@ export function DataSourceModal() {
       setDbReady(true);
       setLoaded(true);
       addToast({ variant: "success", title: "Data loaded from URL" });
+      autoAnalyze(schemas, setSchemas).then(setSchemas).catch(() => {});
       setTimeout(() => { setLoaded(false); toggleDataSource(); }, 800);
     } catch (e) {
       addToast({ variant: "error", title: "Failed to load URL", message: String(e) });
@@ -78,6 +81,7 @@ export function DataSourceModal() {
       setDbReady(true);
       setLoaded(true);
       addToast({ variant: "success", title: "Pasted data loaded" });
+      autoAnalyze(schemas, setSchemas).then(setSchemas).catch(() => {});
       setTimeout(() => { setLoaded(false); toggleDataSource(); }, 800);
     } catch (e) {
       addToast({ variant: "error", title: "Failed to parse pasted data", message: String(e) });
@@ -100,6 +104,7 @@ export function DataSourceModal() {
       setDbReady(true);
       setLoaded(true);
       addToast({ variant: "success", title: `Loaded ${title}`, message: `${schemas.length} table(s) ready` });
+      autoAnalyze(schemas, setSchemas).then(setSchemas).catch(() => {});
       setTimeout(() => { setLoaded(false); toggleDataSource(); }, 800);
     } catch (e) {
       addToast({ variant: "error", title: "Failed to load sample", message: String(e) });

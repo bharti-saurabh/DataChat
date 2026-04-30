@@ -4,7 +4,6 @@ import type { DemoConfig } from "@/types";
 import { useDataStore } from "@/store/useDataStore";
 import { loadFile } from "@/lib/db";
 import { FileUpload } from "@/components/upload/FileUpload";
-import { ClusterSectionInner } from "@/components/cluster/ClusterCard";
 import { cn } from "@/lib/utils";
 
 function ExplorerDemoGrid() {
@@ -142,15 +141,8 @@ export function ExplorerLanding() {
         {/* General instructions */}
         <InstructionsPanel />
 
-        {/* Data clusters */}
-        <ClusterSectionInner />
-
-        {/* Single-file demos */}
-        <div>
-          <h2 className="text-base font-semibold text-gray-800 dark:text-gray-200 mb-1">Single-file demos</h2>
-          <p className="text-xs text-gray-400 mb-3">Quick-start with a single CSV dataset.</p>
-          <ExplorerDemoGrid />
-        </div>
+        {/* Demo datasets */}
+        <ExplorerDemoGrid />
       </div>
     </div>
   );
