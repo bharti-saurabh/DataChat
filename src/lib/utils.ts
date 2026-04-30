@@ -44,8 +44,19 @@ export function exportJSON(data: QueryRow[], filename = "datachat.json") {
 }
 
 export function extractSQL(text: string): string {
-  const match = text.match(/```(?:sql)?\s*\n([\s\S]*?)```/i);
-  return match?.[1]?.trim() ?? text.trim();
+  // Prefer an explicitly labelled ```sql block
+  const sqlBlock = text.match(/```sql\s*\n([\s\S]*?)```/i);
+  if (sqlBlock) return sqlBlock[1].trim();
+
+  // Fall back to any fenced code block (```duckdb, ``` alone, etc.)
+  const anyBlock = text.match(/```(?:\w+)?\s*\n([\s\S]*?)```/i);
+  if (anyBlock) return anyBlock[1].trim();
+
+  // Last resort: slice from the first SQL keyword
+  const kwMatch = text.search(/\b(SELECT|WITH|INSERT|UPDATE|DELETE|CREATE|DROP|ALTER)\b/i);
+  if (kwMatch !== -1) return text.slice(kwMatch).trim();
+
+  return text.trim();
 }
 
 export function extractJSCode(text: string): string | null {

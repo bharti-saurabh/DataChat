@@ -92,7 +92,8 @@ Answer following these steps:
 4. Write SQL to answer the question. Use DuckDB SQL syntax (window functions, CTEs, QUALIFY, PIVOT all supported).
 
 Replace generic filter values by querying a random value from the data.
-Always use "TableName"."ColumnName" notation.`;
+Always use "TableName"."ColumnName" notation.
+Always wrap the final SQL in a single \`\`\`sql ... \`\`\` code block. Do not put any other content inside code blocks.`;
 
     const assistantMsgId = generateId();
     addMessage({ id: assistantMsgId, role: "assistant", timestamp: Date.now() });
