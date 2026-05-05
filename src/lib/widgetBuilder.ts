@@ -56,7 +56,7 @@ ${clusterBlock}
 
 Rules:
 - Use a 12-column grid (x+w ≤ 12). Keep y values compact (0–6 range). Pack left-to-right, row by row.
-- KPI widgets: w=3, h=2. SQL returns ONE row with a "value" column; optionally "label", "delta" (%), "unit". Place 4 KPIs in the first row (y=0).
+- KPI widgets: w=3, h=2. SQL MUST return ONE row with columns: "value" (latest month metric), "previous" (prior month same metric), "delta" (MoM % change as a number = ROUND((value-previous)*100.0/NULLIF(previous,0),1)), "period" (latest month label e.g. strftime(date_col,'%b %Y') or format like 'Jan 2025'), optionally "label" and "unit". Use a two-CTE pattern: first CTE gets per-month aggregates, second CTE uses LAG() to get the prior month value, then SELECT the latest row. Place 4 KPIs in the first row (y=0).
 - Chart widgets: w=6, h=4. SQL returns rows. Set xKey and yKey (column names). chartType: bar|line|area|pie|donut|scatter. Place charts starting at y=2.
 - Table widgets: w=6 or w=12, h=4. SQL returns up to 50 rows.
 - Insight widgets: w=3 or w=6, h=2. Fill "insight" with a concise text observation (no SQL).
