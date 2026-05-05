@@ -55,14 +55,15 @@ export async function buildDashboard(
 ${clusterBlock}
 
 Rules:
-- Use a 12-column grid (x+w ≤ 12). Keep y values compact (0–8 range).
-- KPI widgets: w=3, h=2. SQL returns ONE row with a "value" column; optionally "label", "delta" (%), "unit".
-- Chart widgets: w=6 or w=9, h=5. SQL returns rows. Set xKey and yKey (column names). chartType: bar|line|area|pie|donut|scatter.
-- Table widgets: w=6 or w=12, h=5. SQL returns up to 100 rows.
-- Insight widgets: w=4 or w=6, h=2. Fill "insight" with a concise text observation (no SQL).
+- Use a 12-column grid (x+w ≤ 12). Keep y values compact (0–6 range). Pack left-to-right, row by row.
+- KPI widgets: w=3, h=2. SQL returns ONE row with a "value" column; optionally "label", "delta" (%), "unit". Place 4 KPIs in the first row (y=0).
+- Chart widgets: w=6, h=4. SQL returns rows. Set xKey and yKey (column names). chartType: bar|line|area|pie|donut|scatter. Place charts starting at y=2.
+- Table widgets: w=6 or w=12, h=4. SQL returns up to 50 rows.
+- Insight widgets: w=3 or w=6, h=2. Fill "insight" with a concise text observation (no SQL).
 - Use DuckDB SQL syntax (window functions, CTEs, PIVOT all supported).
-- Generate 4–8 diverse widgets covering the prompt comprehensively.
-- Pack the grid left-to-right, row by row.
+- MANDATORY: Always include at least 2 chart widgets. Never produce a dashboard with only KPIs and tables.
+- TIME TRENDS: If any column is a date/timestamp, always include a time-trend chart grouped by quarter (use date_trunc('quarter', date_col) AS period) showing the most recent 3–4 quarters. Use a bar or line chart with period as xKey.
+- Generate 6–8 widgets total: 4 KPIs + 2 charts (including 1 time-trend if date exists) + 1 table + optional insight.
 ${existingContext}${instructionsBlock}
 Dataset schema:
 ${schemaText}

@@ -55,7 +55,7 @@ export function BentoGrid() {
         className="layout"
         layout={layout as Layout}
         cols={12}
-        rowHeight={100}
+        rowHeight={70}
         width={gridWidth}
         onLayoutChange={onLayoutChange}
         draggableHandle=".drag-handle"

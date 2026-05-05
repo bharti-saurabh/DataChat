@@ -6,10 +6,10 @@ import { buildDashboard, executeWidget } from "@/lib/widgetBuilder";
 import { cn } from "@/lib/utils";
 
 const EXAMPLE_PROMPTS = [
-  "Build me an executive overview of this data",
-  "Show key trends and metrics",
-  "Analyse distributions and top performers",
-  "Create a summary dashboard",
+  "Build an executive overview with KPIs and trend charts",
+  "Show quarter-over-quarter trends for the last 3 quarters",
+  "Analyse top performers and distributions",
+  "Create a risk summary with charts and key metrics",
 ];
 
 export function PromptBar() {
